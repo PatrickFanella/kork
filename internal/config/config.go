@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"git.subcult.tv/subculture-collective/zelda/internal/seal"
 )
 
 type Config struct {
@@ -43,6 +45,9 @@ type Config struct {
 	// PublishMinAge is how old an account must be before it can publish,
 	// unless an admin approves it. Zero disables the gate.
 	PublishMinAge time.Duration
+	// SecretKey (ZELDA_SECRET_KEY, 32 bytes) encrypts stored third-party API
+	// keys such as a creator's Brevo key. Nil disables features that need it.
+	SecretKey []byte
 
 	SMTPHost string
 	SMTPPort int
@@ -92,6 +97,13 @@ func Load() (*Config, error) {
 		return nil, errors.New("ZELDA_PUBLISH_MIN_ACCOUNT_AGE must be a duration such as 24h, or 0 to disable")
 	}
 	c.PublishMinAge = age
+	if v := env("ZELDA_SECRET_KEY", ""); v != "" {
+		key, err := seal.ParseKey(v)
+		if err != nil {
+			return nil, errors.New("ZELDA_SECRET_KEY: " + err.Error() + " (generate one with: openssl rand -base64 32)")
+		}
+		c.SecretKey = key
+	}
 	port, err := strconv.Atoi(env("ZELDA_SMTP_PORT", "587"))
 	if err != nil {
 		return nil, errors.New("ZELDA_SMTP_PORT must be a number")

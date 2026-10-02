@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type DragEvent } from "react";
-import { api, errorMessage, type Block, type BlockType, type CatalogService } from "../../api";
+import { api, errorMessage, type Block, type BlockData, type BlockType, type CatalogService } from "../../api";
 import { useCatalog } from "../../catalog";
 import { BLOCK_ICONS, Icon } from "../../components/Icon";
 import { ConfirmButton, Notice, Switch } from "../../components/ui";
@@ -10,6 +10,7 @@ import { BlockForm } from "./BlockForm";
 import { ImportPanel } from "./ImportPanel";
 import { ScheduleBadge } from "./ScheduleBadge";
 import { ServiceMonogram, ServicePicker } from "./ServicePicker";
+import { SignupContacts } from "./SignupContacts";
 import type { EditorProps } from "./types";
 
 type AddState =
@@ -297,6 +298,9 @@ export function BlocksTab({ page, setPage, saved }: EditorProps) {
                         saved();
                       }}
                     />
+                    {block.type === "email_signup" && (
+                      <SignupContacts pageId={page.id} blockId={block.id} brevo={block.data.destination === "brevo"} />
+                    )}
                   </div>
                 )}
               </li>
@@ -317,7 +321,7 @@ function AddBlockPanel({
   state: NonNullable<AddState>;
   setState: (s: AddState) => void;
   typeName: (t: BlockType) => string;
-  onCreate: (type: BlockType, data: Record<string, string | boolean | undefined>, schedule: BlockSchedule) => Promise<void>;
+  onCreate: (type: BlockType, data: BlockData, schedule: BlockSchedule) => Promise<void>;
 }) {
   const catalog = useCatalog();
   const known = new Set<string>(BLOCK_ORDER);

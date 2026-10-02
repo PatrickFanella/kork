@@ -57,6 +57,48 @@
     }
   });
 
+  // Email sign-up forms: double opt-in, so the server only sends a link.
+  for (const signup of document.querySelectorAll("form[data-signup]")) {
+    const status = signup.querySelector(".signup-status");
+    const show = (msg, error) => {
+      status.textContent = msg;
+      status.classList.toggle("error", !!error);
+    };
+    signup.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const input = signup.elements.email;
+      if (!input.value.trim() || !input.checkValidity()) {
+        show("Enter a valid email address.", true);
+        input.focus();
+        return;
+      }
+      if (preview) {
+        show("Sign-ups are disabled in preview.", true);
+        return;
+      }
+      const button = signup.querySelector("button[type=submit]");
+      button.disabled = true;
+      try {
+        const res = await fetch("/api/subscribe/" + signup.dataset.signup, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Requested-With": "zelda" },
+          body: JSON.stringify({ email: input.value.trim(), website: signup.elements.website.value }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (res.ok) {
+          show(body.message || "Check your inbox to confirm.");
+          signup.reset();
+        } else {
+          show(body.error?.message ? body.error.message.charAt(0).toUpperCase() + body.error.message.slice(1) + "." : "Couldn't sign you up. Try again later.", true);
+        }
+      } catch {
+        show("Couldn't sign you up. Try again later.", true);
+      } finally {
+        button.disabled = false;
+      }
+    });
+  }
+
   const form = document.getElementById("report-form");
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();

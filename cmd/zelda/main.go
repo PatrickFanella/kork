@@ -74,6 +74,10 @@ func run(log *slog.Logger) error {
 		RetentionDays: cfg.StatsRetentionDays}
 	go jobs.Run(ctx, time.Hour)
 	app := server.New(cfg, st, sender, log, editor)
+	go app.RunSignupJobs(ctx, 15*time.Minute)
+	if len(cfg.SecretKey) == 0 {
+		log.Warn("ZELDA_SECRET_KEY not set: email sign-up blocks can only keep lists in Kork, not send them to Brevo")
+	}
 	if sc := screener(ctx, cfg, log); sc != nil {
 		app.SetScreener(sc)
 		go app.RunRechecks(ctx, 6*time.Hour)
