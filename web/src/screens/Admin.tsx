@@ -4,6 +4,7 @@ import { api, errorMessage, type Report } from "../api";
 import { useUser } from "../auth";
 import { Icon } from "../components/Icon";
 import { Notice, PageLoading, formatRelative, useDocumentTitle } from "../components/ui";
+import { AdminUsers } from "./AdminUsers";
 import { PendingAccounts } from "./PendingAccounts";
 
 const REASONS: Record<string, string> = {
@@ -23,6 +24,7 @@ export function AdminScreen() {
     <>
       <Reports />
       <PendingAccounts />
+      <AdminUsers />
     </>
   );
 }

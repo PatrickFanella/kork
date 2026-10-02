@@ -4,12 +4,16 @@ import { Icon } from "../../components/Icon";
 import { ConfirmButton, CopyRow, Notice, Spinner, TextField } from "../../components/ui";
 import { hostnameProblem, normalizeHostname } from "../../lib/validate";
 import type { EditorProps } from "./types";
+import { ProBadge, UpgradeNote } from "../../components/Pro";
+import { planAllows, usePlan } from "../../plan";
 
 export function DomainsTab({ page, setPage, saved }: EditorProps) {
   const [hostname, setHostname] = useState("");
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { plan } = usePlan();
+  const allowed = planAllows(plan, "custom_domains");
   const normalized = normalizeHostname(hostname);
   const problem = hostname ? hostnameProblem(normalized) : null;
 
@@ -38,8 +42,17 @@ export function DomainsTab({ page, setPage, saved }: EditorProps) {
   return (
     <div className="stack-lg">
       <section className="card section" aria-labelledby="domain-add-heading">
-        <h2 id="domain-add-heading">Custom domain</h2>
+        <h2 id="domain-add-heading">
+          Custom domain {!allowed && <ProBadge />}
+        </h2>
         <p className="muted">Show this page on your own domain, like links.yourname.com. HTTPS is set up automatically.</p>
+        {!allowed && <UpgradeNote>Custom domains are part of Pro.</UpgradeNote>}
+        {plan?.domains_grace_until && (
+          <Notice tone="warning" title="Pro has ended">
+            Your custom domain keeps working until {new Date(plan.domains_grace_until).toLocaleDateString()}. After that it stays
+            attached but stops showing this page until you have Pro again.
+          </Notice>
+        )}
         <form className="inline-form" onSubmit={onAdd} noValidate>
           <TextField
             label="Hostname"
@@ -53,9 +66,10 @@ export function DomainsTab({ page, setPage, saved }: EditorProps) {
             spellCheck={false}
             inputMode="url"
             autoComplete="off"
+            disabled={!allowed}
             error={error ?? (touched ? problem : null)}
           />
-          <button type="submit" className="btn btn-primary" disabled={busy || !hostname}>
+          <button type="submit" className="btn btn-primary" disabled={busy || !hostname || !allowed}>
             {busy ? <Spinner label="Adding" /> : <Icon name="plus" />}
             <span>Add domain</span>
           </button>
@@ -118,6 +132,7 @@ function DomainCard({
           <span className={`badge ${domain.verified ? "badge-live" : "badge-draft"}`}>
             {domain.verified ? "Verified" : "Waiting for DNS"}
           </span>
+          {domain.active === false && <span className="badge badge-danger">Inactive: needs Pro</span>}
         </div>
         <ConfirmButton
           label="Remove"
@@ -134,7 +149,11 @@ function DomainCard({
         />
       </div>
 
-      {domain.verified ? (
+      {domain.verified && domain.active === false ? (
+        <UpgradeNote>
+          This domain is kept, but {domain.hostname} doesn't show your page while your account is on Free.
+        </UpgradeNote>
+      ) : domain.verified ? (
         <p className="muted">
           This page is live at{" "}
           <a href={`https://${domain.hostname}/`} target="_blank" rel="noreferrer">

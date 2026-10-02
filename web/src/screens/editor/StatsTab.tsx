@@ -4,16 +4,20 @@ import { Notice, PageLoading } from "../../components/ui";
 import { countryLabel, formatPercent, referrerLabel } from "../../lib/stats";
 import { fillDays } from "../../lib/validate";
 import type { EditorProps } from "./types";
+import { ProBadge, UpgradeNote } from "../../components/Pro";
+import { usePlan } from "../../plan";
 import { WeeklyEmailToggle } from "./WeeklyEmailToggle";
 
-// The server returns at most 30 days for now.
-const RANGES = [7, 30] as const;
+// Ranges past the plan's stats_days are shown disabled with a Pro badge.
+const RANGES = [7, 30, 90, 365] as const;
 
 export function StatsTab({ page }: EditorProps) {
   const [days, setDays] = useState<number>(30);
   const [stats, setStats] = useState<{ days: number; data: Stats } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const { plan } = usePlan();
+  const maxDays = stats?.data.max_days ?? plan?.stats_days ?? 30;
 
   useEffect(() => {
     let cancelled = false;
@@ -27,13 +31,24 @@ export function StatsTab({ page }: EditorProps) {
     };
   }, [page.id, days, reload]);
 
+  const locked = RANGES.some((r) => r > maxDays);
   const rangeControl = (
-    <div className="segmented" role="group" aria-label="Date range">
-      {RANGES.map((r) => (
-        <button key={r} type="button" className="segmented-option" aria-pressed={days === r} onClick={() => setDays(r)}>
-          {r} days
-        </button>
-      ))}
+    <div className="stack">
+      <div className="segmented" role="group" aria-label="Date range">
+        {RANGES.map((r) => (
+          <button
+            key={r}
+            type="button"
+            className="segmented-option"
+            aria-pressed={days === r}
+            disabled={r > maxDays}
+            onClick={() => setDays(r)}
+          >
+            {r} days{r > maxDays && <ProBadge />}
+          </button>
+        ))}
+      </div>
+      {locked && <UpgradeNote>Pro keeps {plan?.pro.stats_days ?? 365} days of stats history.</UpgradeNote>}
     </div>
   );
 
