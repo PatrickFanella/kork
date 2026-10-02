@@ -5,7 +5,8 @@ import { countryLabel, formatPercent, referrerLabel } from "../../lib/stats";
 import { fillDays } from "../../lib/validate";
 import type { EditorProps } from "./types";
 import { ProBadge, UpgradeNote } from "../../components/Pro";
-import { usePlan } from "../../plan";
+import { planAllows, usePlan } from "../../plan";
+import { Icon } from "../../components/Icon";
 import { WeeklyEmailToggle } from "./WeeklyEmailToggle";
 
 // Ranges past the plan's stats_days are shown disabled with a Pro badge.
@@ -49,6 +50,26 @@ export function StatsTab({ page }: EditorProps) {
         ))}
       </div>
       {locked && <UpgradeNote>Pro keeps {plan?.pro.stats_days ?? 365} days of stats history.</UpgradeNote>}
+    </div>
+  );
+  const canExport = planAllows(plan, "stats_export");
+  const exportDays = stats?.days ?? days;
+  const exportControl = (
+    <div className="stack">
+      <div className="row">
+        {canExport ? (
+          <a className="btn btn-sm" href={api.statsCsvUrl(page.id, exportDays)} download>
+            <Icon name="down" size={16} />
+            <span>Download CSV ({exportDays} days)</span>
+          </a>
+        ) : (
+          <button type="button" className="btn btn-sm" disabled>
+            <Icon name="down" size={16} />
+            <span>Download CSV</span> <ProBadge />
+          </button>
+        )}
+      </div>
+      {!canExport && <UpgradeNote>Downloading stats as CSV is part of Pro.</UpgradeNote>}
     </div>
   );
 
@@ -162,6 +183,8 @@ export function StatsTab({ page }: EditorProps) {
       <p className="muted small">
         Referrers and countries are daily totals per page. No IP addresses, cookies or browser details are stored.
       </p>
+
+      {exportControl}
 
       <WeeklyEmailToggle />
     </div>
