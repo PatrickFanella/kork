@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"git.subcult.tv/subculture-collective/zelda/internal/blocks"
@@ -72,6 +73,8 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 		"layouts":         catalog.Layouts,
 		"embed_providers": catalog.EmbedProviders,
 		"features":        map[string]bool{"custom_domains": s.cfg.CustomDomains, "brevo_signup": s.x.sealer != nil},
+		"domain_mode":     s.domains.Mode(),
+		"domain_target":   s.cfg.DomainTarget,
 	})
 }
 
@@ -121,16 +124,27 @@ func (s *Server) handleListPages(w http.ResponseWriter, r *http.Request) {
 
 type domainView struct {
 	*store.Domain
+	// TXTName and TXTValue are the ownership TXT record: _zelda.<host> in
+	// DNS mode, Cloudflare's ownership_verification record (or empty) in
+	// Cloudflare mode.
 	TXTName  string `json:"txt_name"`
 	TXTValue string `json:"txt_value"`
 	Target   string `json:"target"`
 	// Active is false when the owner's plan no longer covers the domain;
 	// it stays attached but the page isn't served on it.
 	Active bool `json:"active"`
+	// Mode is "dns" or "cloudflare"; Status is "pending", "active" or "error".
+	Mode      string      `json:"mode"`
+	Status    string      `json:"status"`
+	Records   []dnsRecord `json:"records"`
+	Errors    []string    `json:"errors"`
+	CheckedAt *time.Time  `json:"checked_at"`
 }
 
 func (s *Server) domainView(d *store.Domain) domainView {
-	return domainView{d, "_zelda." + d.Hostname, "zelda-verify=" + d.VerifyToken, s.cfg.DomainTarget, true}
+	v := domainView{Domain: d, Target: s.cfg.DomainTarget, Active: true, Mode: s.domains.Mode(), Errors: []string{}}
+	s.domains.Describe(d, &v)
+	return v
 }
 
 type pageView struct {
@@ -362,6 +376,7 @@ func (s *Server) handleDeletePage(w http.ResponseWriter, r *http.Request) {
 	if p == nil {
 		return
 	}
+	s.domains.Release(r.Context(), p.ID, "")
 	if err := s.store.DeletePage(r.Context(), p.ID); err != nil {
 		s.serverErr(w, r, err)
 		return

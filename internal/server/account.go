@@ -176,6 +176,7 @@ func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &body) || !s.confirmPassword(w, u, body.Password, "password") {
 		return
 	}
+	s.domains.Release(r.Context(), "", u.ID)
 	uploads, err := s.store.DeleteUser(r.Context(), u.ID)
 	if err != nil {
 		s.serverErr(w, r, err)

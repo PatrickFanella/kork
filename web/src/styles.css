@@ -1874,6 +1874,15 @@ a.editor-url:hover {
 .dns-steps .btn {
   align-self: flex-start;
 }
+.dns-record {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.domain-errors {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
 
 /* ---------- Stats ---------- */
 

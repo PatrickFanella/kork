@@ -30,6 +30,10 @@ type Config struct {
 	AdminEmails map[string]bool
 	// CustomDomains enables attaching user domains (needs on-demand TLS in front).
 	CustomDomains bool
+	// CloudflareToken and CloudflareZoneID switch custom domains to Cloudflare
+	// for SaaS custom hostnames when both are set (see docs/custom-domains-cloudflare.md).
+	CloudflareToken  string
+	CloudflareZoneID string
 	// StatsRetentionDays is how long aggregate stats rows are kept.
 	StatsRetentionDays int
 	// ContactEmail is shown on the terms and privacy pages.
@@ -80,6 +84,8 @@ func Load() (*Config, error) {
 		ContactEmail: env("ZELDA_CONTACT_EMAIL", "hello@subcult.tv"),
 	}
 	c.CustomDomains = env("ZELDA_CUSTOM_DOMAINS", "true") == "true"
+	c.CloudflareToken = env("ZELDA_CLOUDFLARE_TOKEN", "")
+	c.CloudflareZoneID = env("ZELDA_CLOUDFLARE_ZONE_ID", "")
 	c.AdminEmails = map[string]bool{}
 	for _, e := range strings.FieldsFunc(env("ZELDA_ADMIN_EMAILS", ""), func(r rune) bool { return r == ',' || r == ' ' }) {
 		c.AdminEmails[strings.ToLower(e)] = true
@@ -134,3 +140,6 @@ func Load() (*Config, error) {
 	}
 	return c, nil
 }
+
+// CloudflareDomains reports whether custom domains use Cloudflare for SaaS.
+func (c *Config) CloudflareDomains() bool { return c.CloudflareToken != "" && c.CloudflareZoneID != "" }

@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"git.subcult.tv/subculture-collective/zelda/internal/cloudflare"
 	"git.subcult.tv/subculture-collective/zelda/internal/config"
 	"git.subcult.tv/subculture-collective/zelda/internal/fetch"
 	"git.subcult.tv/subculture-collective/zelda/internal/mail"
@@ -47,6 +48,8 @@ type Server struct {
 	safeTTL   time.Duration // how long a safe verdict is cached; 0 disables
 	unsafeTTL time.Duration
 	fetcher   *fetch.Client
+	// domains registers and verifies custom domains (DNS check or Cloudflare).
+	domains domainProvider
 
 	signupLimit  *limiter
 	loginIPLimit *limiter
@@ -67,7 +70,7 @@ func New(cfg *config.Config, st *store.Store, sender mail.Sender, log *slog.Logg
 	if err := os.MkdirAll(cfg.UploadDir, 0o750); err != nil {
 		log.Error("create upload dir", "err", err)
 	}
-	return &Server{
+	s := &Server{
 		cfg: cfg, store: st, mail: sender, log: log, resolver: net.DefaultResolver, editor: editor, now: time.Now,
 		safeTTL: 24 * time.Hour, unsafeTTL: 7 * 24 * time.Hour,
 		signupLimit:  newLimiter(5, time.Hour),
@@ -84,6 +87,11 @@ func New(cfg *config.Config, st *store.Store, sender mail.Sender, log *slog.Logg
 		acct:         newAccountLimits(),
 		x:            newBlockExtras(cfg),
 	}
+	s.domains = dnsDomains{s}
+	if cfg.CloudflareDomains() {
+		s.UseCloudflare(cloudflare.New(cfg.CloudflareToken, cfg.CloudflareZoneID))
+	}
+	return s
 }
 
 // SetResolver replaces the DNS resolver (tests).

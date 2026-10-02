@@ -73,6 +73,10 @@ export interface Catalog {
   services: CatalogService[];
   /** Missing on older servers; treat absent flags as enabled. */
   features?: CatalogFeatures;
+  /** How custom domains are verified. Missing on older servers; treat as "dns". */
+  domain_mode?: DomainMode;
+  /** Hostname custom domains point a CNAME at. */
+  domain_target?: string;
   categories: KeyName[];
   block_types: BlockTypeInfo[];
   themes: CatalogTheme[];
@@ -163,6 +167,15 @@ export interface Block {
   ends_at?: string | null;
 }
 
+export type DomainMode = "dns" | "cloudflare";
+
+export interface DomainRecord {
+  type: string;
+  name: string;
+  value: string;
+  purpose: "routing" | "ownership" | "certificate";
+}
+
 export interface Domain {
   id: string;
   hostname: string;
@@ -173,6 +186,14 @@ export interface Domain {
   created_at: string;
   /** False when the owner's plan no longer covers the domain. Missing on older servers. */
   active?: boolean;
+  /** The fields below are missing on older servers. */
+  mode?: DomainMode;
+  status?: "pending" | "active" | "error";
+  /** DNS records the user adds at their DNS provider. */
+  records?: DomainRecord[];
+  /** Readable problems reported by the check (Cloudflare mode). */
+  errors?: string[];
+  checked_at?: string | null;
 }
 
 export interface PageSummary {
