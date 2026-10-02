@@ -78,6 +78,10 @@ func run(log *slog.Logger) error {
 		app.SetScreener(sc)
 		go app.RunRechecks(ctx, 6*time.Hour)
 	}
+	if cfg.StripeEnabled() || cfg.PatreonEnabled() {
+		log.Info("billing enabled", "stripe", cfg.StripeEnabled(), "patreon", cfg.PatreonEnabled())
+		go app.RunBillingJobs(ctx, time.Hour)
+	}
 	if cfg.PublishMinAge > 0 {
 		log.Info("new accounts can publish after", "min_age", cfg.PublishMinAge.String())
 	}
