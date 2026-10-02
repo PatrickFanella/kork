@@ -16,7 +16,7 @@ import (
 func (c *client) signupVerified(email string) store.User {
 	c.e.t.Helper()
 	var me struct{ User store.User }
-	if code := c.do("POST", "/api/auth/signup", map[string]string{"email": email, "password": "correct horse battery"}, &me); code != 201 {
+	if code := c.do("POST", "/api/auth/signup", map[string]any{"email": email, "password": "correct horse battery", "accept_terms": true}, &me); code != 201 {
 		c.e.t.Fatalf("signup %s: %d", email, code)
 	}
 	tok := c.e.mail.tokenFor(c.e.t, email, "/app/verify")
