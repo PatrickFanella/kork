@@ -196,6 +196,34 @@ export interface Upload {
   size: number;
 }
 
+/** A block proposed by an import, already validated by the server. */
+export interface ImportItem {
+  type: BlockType;
+  data: BlockData;
+  label: string;
+}
+
+export interface ImportPreview {
+  source_url: string;
+  /** Which parser read the page: "linktree" or "generic". */
+  parser: string;
+  title: string;
+  bio: string;
+  /** Remote image URL; import it with importImage, never display it directly. */
+  avatar_url: string;
+  items: ImportItem[];
+}
+
+export interface LinkPreview {
+  url: string;
+  title: string;
+  description: string;
+  thumbnail_upload_id?: string;
+  thumbnail_url?: string;
+  /** Why the page's image was skipped, if it was. */
+  image_error?: string;
+}
+
 export type ReportReason = "spam" | "scam" | "impersonation" | "illegal" | "other";
 
 export interface Report {
@@ -364,6 +392,11 @@ export const api = {
     form.append("file", file);
     return request<Upload>("POST", "/api/uploads", form);
   },
+
+  // Import and link previews (the server fetches the remote page)
+  importPreview: (url: string) => request<ImportPreview>("POST", "/api/import/preview", { url }),
+  importImage: (url: string) => request<Upload>("POST", "/api/import/image", { url }),
+  linkPreview: (url: string) => request<LinkPreview>("POST", "/api/link-preview", { url }),
 
   // Admin
   reports: () => request<Report[]>("GET", "/api/admin/reports"),

@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { Fragment, useState, type FormEvent } from "react";
 import { ApiError, errorMessage, type BlockData, type BlockType, type CatalogService } from "../../api";
 import { useCatalog } from "../../catalog";
 import { ImageField, Notice, Spinner, TextField, uploadUrl } from "../../components/ui";
 import { blockFields, cleanBlockData, missingRequired, type FieldSpec } from "../../lib/blocks";
+import { LinkPreviewHelper } from "./LinkPreviewHelper";
 import { ServiceMonogram } from "./ServicePicker";
 
 interface BlockFormProps {
@@ -83,15 +84,25 @@ export function BlockForm({ type, service, initial = {}, submitLabel, onSubmit, 
       {type === "divider" && <p className="muted">Dividers have no settings.</p>}
       {general && <Notice tone="danger">{general}</Notice>}
       {fields.map((f) => (
-        <FieldInput
-          key={f.key}
-          spec={f}
-          value={data[f.key]}
-          error={errors[f.key]}
-          prefix={type === "service" && f.key === "value" && service?.input === "handle" ? service.prefix : undefined}
-          hint={f.key === "url" && type === "embed" ? embedHint : f.hint}
-          onChange={(v) => set(f.key, v)}
-        />
+        <Fragment key={f.key}>
+          <FieldInput
+            spec={f}
+            value={data[f.key]}
+            error={errors[f.key]}
+            prefix={type === "service" && f.key === "value" && service?.input === "handle" ? service.prefix : undefined}
+            hint={f.key === "url" && type === "embed" ? embedHint : f.hint}
+            onChange={(v) => set(f.key, v)}
+          />
+          {type === "link" && f.key === "url" && (
+            <LinkPreviewHelper
+              url={str(data.url)}
+              title={str(data.title)}
+              subtitle={str(data.subtitle)}
+              thumbnailId={str(data.thumbnail_upload_id)}
+              onUse={set}
+            />
+          )}
+        </Fragment>
       ))}
       <div className="form-actions">
         <button type="submit" className="btn btn-primary" disabled={busy}>
@@ -105,6 +116,8 @@ export function BlockForm({ type, service, initial = {}, submitLabel, onSubmit, 
     </form>
   );
 }
+
+const str = (v: string | boolean | undefined) => (typeof v === "string" ? v : "");
 
 function focusFirstError(form: HTMLFormElement) {
   window.requestAnimationFrame(() => {

@@ -6,6 +6,7 @@ import { ConfirmButton, Notice, Switch } from "../../components/ui";
 import { BLOCK_FALLBACK, BLOCK_ORDER, blockSummary } from "../../lib/blocks";
 import { MAX_BLOCKS, moveItem } from "../../lib/validate";
 import { BlockForm } from "./BlockForm";
+import { ImportPanel } from "./ImportPanel";
 import { ServiceMonogram, ServicePicker } from "./ServicePicker";
 import type { EditorProps } from "./types";
 
@@ -18,6 +19,7 @@ type AddState =
 export function BlocksTab({ page, setPage, saved }: EditorProps) {
   const catalog = useCatalog();
   const [adding, setAdding] = useState<AddState>(null);
+  const [importing, setImporting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [announce, setAnnounce] = useState("");
@@ -135,6 +137,10 @@ export function BlocksTab({ page, setPage, saved }: EditorProps) {
         </Notice>
       )}
 
+      {importing && (
+        <ImportPanel page={page} setPage={setPage} saved={saved} announce={setAnnounce} onClose={() => setImporting(false)} />
+      )}
+
       {adding ? (
         <AddBlockPanel
           state={adding}
@@ -150,10 +156,18 @@ export function BlocksTab({ page, setPage, saved }: EditorProps) {
         />
       ) : (
         <div className="blocks-toolbar">
-          <button type="button" className="btn btn-primary" onClick={() => setAdding({ step: "type" })} disabled={atLimit}>
-            <Icon name="plus" />
-            <span>Add block</span>
-          </button>
+          <div className="blocks-toolbar-actions">
+            <button type="button" className="btn btn-primary" onClick={() => setAdding({ step: "type" })} disabled={atLimit}>
+              <Icon name="plus" />
+              <span>Add block</span>
+            </button>
+            {!importing && (
+              <button type="button" className="btn" onClick={() => setImporting(true)} disabled={atLimit}>
+                <Icon name="upload" />
+                <span>Import</span>
+              </button>
+            )}
+          </div>
           <span className="muted small">
             {blocks.length} {blocks.length === 1 ? "block" : "blocks"}
             {atLimit ? ` (limit ${MAX_BLOCKS})` : ""}
@@ -161,13 +175,16 @@ export function BlocksTab({ page, setPage, saved }: EditorProps) {
         </div>
       )}
 
-      {blocks.length === 0 && !adding ? (
+      {blocks.length === 0 && !adding && !importing ? (
         <div className="empty-state">
           <Icon name="blocks" size={32} />
           <h2>Your page is empty</h2>
           <p className="muted">Add your social profiles, links, payment handles and more.</p>
           <button type="button" className="btn btn-primary" onClick={() => setAdding({ step: "service" })}>
             Add your first profile
+          </button>
+          <button type="button" className="btn" onClick={() => setImporting(true)}>
+            Import from Linktree or another link page
           </button>
         </div>
       ) : (

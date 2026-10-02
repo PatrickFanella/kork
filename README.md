@@ -84,7 +84,8 @@ The `.env` file is not backed up; recreate it from `.env.example` (a new `POSTGR
 ### Abuse controls
 
 - Email verification before publishing.
-- Per-IP and per-account rate limits on signup, login, mail, uploads, reports and click beacons (in-process, so run one replica).
+- Per-IP and per-account rate limits on signup, login, mail, uploads, imports, link previews, reports and click beacons (in-process, so run one replica).
+- Server-side fetches (link-page import, link previews) refuse private, loopback, link-local and metadata addresses at dial time, allow only ports 80/443, and cap redirects, time and size. Fetched images are stored as uploads, never hotlinked.
 - Reserved names (`admin`, `api`, `support`…), URL scheme allowlist, image-only uploads checked by content (no SVG), strict CSP on public pages.
 - Visitors can report a page; admins see reports in the editor and can suspend pages or accounts.
 
