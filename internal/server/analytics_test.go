@@ -39,7 +39,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 func publishedPage(t *testing.T, e *env, email, slug string) (*client, string, []string) {
 	t.Helper()
 	c := e.client()
-	if code := c.do("POST", "/api/auth/signup", map[string]string{"email": email, "password": "correct horse battery"}, nil); code != 201 {
+	if code := c.do("POST", "/api/auth/signup", map[string]any{"email": email, "password": "correct horse battery", "accept_terms": true}, nil); code != 201 {
 		t.Fatalf("signup: %d", code)
 	}
 	tok := e.mail.tokenFor(t, email, "/app/verify")
@@ -254,7 +254,7 @@ func TestWeeklyStatsEmail(t *testing.T) {
 
 	// Unverified users can't opt in.
 	bob := e.client()
-	bob.do("POST", "/api/auth/signup", map[string]string{"email": "bob@example.com", "password": "correct horse battery"}, nil)
+	bob.do("POST", "/api/auth/signup", map[string]any{"email": "bob@example.com", "password": "correct horse battery", "accept_terms": true}, nil)
 	var ae apiErr
 	if code := bob.do("PATCH", "/api/account/settings", map[string]bool{"weekly_stats_email": true}, &ae); code != 403 || ae.Error.Code != "email_unverified" {
 		t.Fatalf("unverified opt-in: %d %+v", code, ae)
