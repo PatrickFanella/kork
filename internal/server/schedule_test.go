@@ -118,7 +118,7 @@ func TestScheduledBlocks(t *testing.T) {
 
 	alice := e.client()
 	var ae apiErr
-	if code := alice.do("POST", "/api/auth/signup", map[string]string{"email": "sched@example.com", "password": "correct horse battery"}, nil); code != 201 {
+	if code := alice.do("POST", "/api/auth/signup", map[string]any{"email": "sched@example.com", "password": "correct horse battery", "accept_terms": true}, nil); code != 201 {
 		t.Fatalf("signup: %d", code)
 	}
 	tok := e.mail.tokenFor(t, "sched@example.com", "/app/verify")
