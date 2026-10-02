@@ -82,6 +82,10 @@ func run(log *slog.Logger) error {
 		app.SetScreener(sc)
 		go app.RunRechecks(ctx, 6*time.Hour)
 	}
+	if cfg.StripeEnabled() || cfg.PatreonEnabled() {
+		log.Info("billing enabled", "stripe", cfg.StripeEnabled(), "patreon", cfg.PatreonEnabled())
+		go app.RunBillingJobs(ctx, time.Hour)
+	}
 	switch {
 	case !cfg.CustomDomains:
 	case cfg.CloudflareDomains():

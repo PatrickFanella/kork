@@ -36,8 +36,14 @@ func (s *Store) PlanOf(ctx context.Context, userID string) (plans.Account, error
 	return scanPlan(plan, source, expires), nil
 }
 
-// SetPlan stores a user's plan. A Free plan clears the source and expiry.
+// SetPlan stores a user's plan. A manual (or unspecified) source sets the
+// admin grant and recomputes the plan from all billing sources, so it never
+// cancels a Stripe or Patreon grant. Other sources write users directly; a
+// Free plan clears the source and expiry.
 func (s *Store) SetPlan(ctx context.Context, userID string, a plans.Account) error {
+	if a.Source == plans.Manual || a.Source == "" {
+		return s.SetManualPlan(ctx, userID, a.Plan == plans.Pro, a.ExpiresAt)
+	}
 	var source *string
 	if a.Plan == plans.Free {
 		a.ExpiresAt = nil

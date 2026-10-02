@@ -177,6 +177,13 @@ func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &body) || !s.confirmPassword(w, u, body.Password, "password") {
 		return
 	}
+	// A subscription would keep charging after the account is gone.
+	if err := s.cancelBillingForDeletion(r.Context(), u.ID); err != nil {
+		s.log.Error("cancel subscription before account deletion", "user", u.ID, "err", err)
+		writeErr(w, http.StatusBadGateway, "billing_unavailable",
+			"Your subscription couldn't be canceled, so the account was not deleted. Try again in a few minutes.", "")
+		return
+	}
 	s.domains.Release(r.Context(), "", u.ID)
 	uploads, err := s.store.DeleteUser(r.Context(), u.ID)
 	if err != nil {

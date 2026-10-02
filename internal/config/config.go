@@ -53,6 +53,26 @@ type Config struct {
 	// keys such as a creator's Brevo key. Nil disables features that need it.
 	SecretKey []byte
 
+	// Stripe subscriptions. All four of key, webhook secret and both prices
+	// must be set to enable Stripe; otherwise its endpoints return 404.
+	StripeSecretKey     string
+	StripeWebhookSecret string
+	StripePriceMonthly  string
+	StripePriceAnnual   string
+	// StripeAutomaticTax turns on Stripe Tax in Checkout.
+	StripeAutomaticTax bool
+	// PriceDisplayMonthly and PriceDisplayAnnual are the labels on the
+	// upgrade buttons, e.g. "$5" and "$48". Stripe charges the price IDs.
+	PriceDisplayMonthly string
+	PriceDisplayAnnual  string
+
+	// Patreon unlock. Client ID, secret, campaign ID, tier IDs and SecretKey
+	// must all be set to enable it.
+	PatreonClientID     string
+	PatreonClientSecret string
+	PatreonCampaignID   string
+	PatreonTierIDs      []string
+
 	SMTPHost string
 	SMTPPort int
 	SMTPUser string
@@ -135,10 +155,66 @@ func Load() (*Config, error) {
 	if c.DomainTarget == "" {
 		c.DomainTarget = u.Hostname()
 	}
+	if err := c.loadBilling(); err != nil {
+		return nil, err
+	}
 	if c.SMTPHost != "" && c.MailFrom == "" {
 		return nil, errors.New("ZELDA_MAIL_FROM is required when ZELDA_SMTP_HOST is set")
 	}
 	return c, nil
+}
+
+// StripeEnabled reports whether Stripe checkout and webhooks are configured.
+func (c *Config) StripeEnabled() bool {
+	return c.StripeSecretKey != "" && c.StripeWebhookSecret != "" && c.StripePriceMonthly != "" && c.StripePriceAnnual != ""
+}
+
+// PatreonEnabled reports whether the Patreon unlock is configured.
+func (c *Config) PatreonEnabled() bool {
+	return c.PatreonClientID != "" && c.PatreonClientSecret != "" && c.PatreonCampaignID != "" &&
+		len(c.PatreonTierIDs) > 0 && len(c.SecretKey) == seal.KeySize
+}
+
+func (c *Config) loadBilling() error {
+	c.StripeSecretKey = env("ZELDA_STRIPE_SECRET_KEY", "")
+	c.StripeWebhookSecret = env("ZELDA_STRIPE_WEBHOOK_SECRET", "")
+	c.StripePriceMonthly = env("ZELDA_STRIPE_PRICE_MONTHLY", "")
+	c.StripePriceAnnual = env("ZELDA_STRIPE_PRICE_ANNUAL", "")
+	c.StripeAutomaticTax = env("ZELDA_STRIPE_AUTOMATIC_TAX", "false") == "true"
+	c.PriceDisplayMonthly = env("ZELDA_PRICE_DISPLAY_MONTHLY", "")
+	c.PriceDisplayAnnual = env("ZELDA_PRICE_DISPLAY_ANNUAL", "")
+	stripe := []string{c.StripeSecretKey, c.StripeWebhookSecret, c.StripePriceMonthly, c.StripePriceAnnual}
+	if some(stripe) && !c.StripeEnabled() {
+		return errors.New("set all of ZELDA_STRIPE_SECRET_KEY, ZELDA_STRIPE_WEBHOOK_SECRET, ZELDA_STRIPE_PRICE_MONTHLY and ZELDA_STRIPE_PRICE_ANNUAL, or none")
+	}
+
+	c.PatreonClientID = env("ZELDA_PATREON_CLIENT_ID", "")
+	c.PatreonClientSecret = env("ZELDA_PATREON_CLIENT_SECRET", "")
+	c.PatreonCampaignID = env("ZELDA_PATREON_CAMPAIGN_ID", "")
+	for _, id := range strings.FieldsFunc(env("ZELDA_PATREON_TIER_IDS", ""), func(r rune) bool { return r == ',' || r == ' ' }) {
+		c.PatreonTierIDs = append(c.PatreonTierIDs, id)
+	}
+	tiers := ""
+	if len(c.PatreonTierIDs) > 0 {
+		tiers = "set"
+	}
+	patreon := []string{c.PatreonClientID, c.PatreonClientSecret, c.PatreonCampaignID, tiers}
+	if some(patreon) && !c.PatreonEnabled() {
+		if c.SecretKey == nil && c.PatreonClientID != "" && c.PatreonClientSecret != "" && c.PatreonCampaignID != "" && tiers != "" {
+			return errors.New("the Patreon unlock needs ZELDA_SECRET_KEY to encrypt stored tokens")
+		}
+		return errors.New("set all of ZELDA_PATREON_CLIENT_ID, ZELDA_PATREON_CLIENT_SECRET, ZELDA_PATREON_CAMPAIGN_ID and ZELDA_PATREON_TIER_IDS, or none")
+	}
+	return nil
+}
+
+func some(vals []string) bool {
+	for _, v := range vals {
+		if v != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // CloudflareDomains reports whether custom domains use Cloudflare for SaaS.

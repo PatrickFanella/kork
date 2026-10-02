@@ -62,6 +62,7 @@ type Server struct {
 	importLimit  *limiter
 	previewLimit *limiter
 	acct         accountLimits
+	bill         *billingClients
 	x            *blockExtras // email sign-up and latest blocks
 }
 
@@ -85,6 +86,7 @@ func New(cfg *config.Config, st *store.Store, sender mail.Sender, log *slog.Logg
 		previewLimit: newLimiter(60, time.Hour),
 		fetcher:      fetch.New(fetch.Options{}),
 		acct:         newAccountLimits(),
+		bill:         newBillingClients(cfg),
 		x:            newBlockExtras(cfg),
 	}
 	s.domains = dnsDomains{s}
@@ -177,6 +179,15 @@ func (s *Server) mainRoutes() *http.ServeMux {
 	m.HandleFunc("POST /api/admin/users/{id}/trust", s.api(s.admin(s.handleAdminTrustUser)))
 	m.HandleFunc("GET /api/admin/users", s.api(s.admin(s.handleAdminUsers)))
 	m.HandleFunc("POST /api/admin/users/{id}/plan", s.api(s.admin(s.handleAdminSetPlan)))
+
+	// Billing: Stripe subscriptions and the Patreon unlock
+	m.HandleFunc("GET /api/billing", s.api(s.authed(s.handleBilling)))
+	m.HandleFunc("POST /api/billing/checkout", s.api(s.authed(s.handleCheckout)))
+	m.HandleFunc("POST /api/billing/portal", s.api(s.authed(s.handlePortal)))
+	m.HandleFunc("GET /api/billing/patreon/connect", s.api(s.authed(s.handlePatreonConnect)))
+	m.HandleFunc("POST /api/billing/patreon/callback", s.api(s.authed(s.handlePatreonCallback)))
+	m.HandleFunc("DELETE /api/billing/patreon", s.api(s.authed(s.handlePatreonDisconnect)))
+	m.HandleFunc("POST /stripe/webhook", s.handleStripeWebhook)
 
 	// Account settings
 	m.HandleFunc("GET /api/account/settings", s.api(s.authed(s.handleGetAccountSettings)))

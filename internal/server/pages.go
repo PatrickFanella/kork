@@ -31,7 +31,7 @@ func init() {
 	for _, s := range strings.Fields(`app api go u t static internal admin administrator root login logout signup
 		register preview vcard healthz help support about terms privacy legal abuse report security settings
 		account dashboard billing pricing blog docs status www mail email null undefined favicon.ico robots.txt
-		sitemap.xml zelda subcult official staff moderator mod team new edit`) {
+		sitemap.xml zelda subcult official staff moderator mod team new edit stripe patreon upgrade`) {
 		reserved[s] = true
 	}
 }
