@@ -133,6 +133,54 @@ body.bg-image .page { background: color-mix(in srgb, var(--bg) 82%, transparent)
 .qr-toggle summary { width: max-content; margin: .35rem auto 0; padding: .2rem .5rem; color: var(--muted); font-size: .8rem; cursor: pointer; }
 .qr-toggle[open] .qr { margin-top: .5rem; }
 
+/* Email sign-up */
+.signup { padding: 1rem; border-radius: 12px; background: var(--surface); }
+.signup h2 { margin: 0; font-size: 1.05rem; overflow-wrap: anywhere; }
+.signup-desc { margin: .3rem 0 0; color: var(--muted); font-size: .92rem; overflow-wrap: anywhere; }
+.signup-row { display: flex; gap: .5rem; margin-top: .8rem; }
+.signup-row input {
+  flex: 1;
+  min-width: 0;
+  min-height: 2.9rem;
+  padding: .5rem .75rem;
+  border: 1px solid color-mix(in srgb, var(--muted) 60%, transparent);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--bg);
+  font: inherit;
+}
+.signup-row .btn { display: block; width: auto; min-height: 2.9rem; padding: .5rem 1rem; font-weight: 650; text-align: center; white-space: nowrap; }
+.signup-hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.signup-note { margin: .5rem 0 0; color: var(--muted); font-size: .78rem; }
+.signup-note a { color: inherit; }
+.signup-status { margin: .4rem 0 0; font-size: .88rem; }
+.signup-status:empty { display: none; }
+.signup-status.error { color: var(--accent); }
+.shape-square .signup, .shape-square .signup-row input { border-radius: 0; }
+
+/* Events */
+.events { display: grid; gap: .5rem; margin: 0; padding: 0; list-style: none; }
+.event { display: grid; grid-template-columns: 3.2rem 1fr auto; align-items: center; gap: .75rem; padding: .6rem .75rem; border-radius: 12px; background: var(--surface); }
+.event-date { display: grid; justify-items: center; line-height: 1.05; }
+.event-month { color: var(--accent); font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.event-day { font-size: 1.35rem; font-weight: 700; }
+.event-text { display: grid; min-width: 0; }
+.event-text strong { overflow-wrap: anywhere; }
+.event-text small { color: var(--muted); font-size: .82rem; }
+.event-action { padding: .4rem .75rem; border-radius: 999px; color: var(--btn-text); background: var(--btn-bg); border: 1px solid var(--accent); font-size: .85rem; font-weight: 650; text-decoration: none; white-space: nowrap; }
+.event-soldout { color: var(--muted); background: transparent; border-color: color-mix(in srgb, var(--muted) 50%, transparent); }
+.sold-out .event-text strong { text-decoration: line-through; text-decoration-thickness: 1px; }
+.shape-square .event, .shape-square .event-action { border-radius: 0; }
+
+/* Latest video/post */
+.latest { display: grid; overflow: hidden; border-radius: 12px; color: var(--text); background: var(--surface); text-decoration: none; transition: transform 120ms ease; }
+.latest:hover { transform: translateY(-1px); }
+.latest-thumb { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: var(--bg); }
+.latest-text { display: grid; gap: .2rem; padding: .75rem 1rem .9rem; }
+.latest-text small { color: var(--muted); font-size: .78rem; letter-spacing: .03em; text-transform: uppercase; }
+.latest-text strong { font-weight: 650; overflow-wrap: anywhere; }
+.shape-square .latest { border-radius: 0; }
+
 .schedule-badge {
   width: max-content;
   max-width: 100%;
@@ -177,6 +225,7 @@ dialog select, dialog textarea { width: 100%; padding: .5rem; border: 1px solid 
 @media (max-width: 480px) {
   .page { padding-top: 2rem; }
   .layout-ledger .page { padding-inline: .75rem; border-inline: 0; }
+  .signup-row { flex-direction: column; }
 }
 
 @media (prefers-reduced-motion: reduce) {

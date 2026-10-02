@@ -48,6 +48,7 @@ h1 { margin: 0 0 1.25rem; font: clamp(2.6rem, 6.2vw, 4.6rem)/.95 var(--display);
   text-decoration: none;
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
+button.cta { font: inherit; font-weight: 700; cursor: pointer; }
 .cta:hover { transform: translate(-2px, -2px); box-shadow: 7px 8px 0 rgb(27 19 12 / .85); }
 .cta:active { transform: translate(2px, 3px); box-shadow: 2px 3px 0 rgb(27 19 12 / .85); }
 .quiet { font-weight: 700; }

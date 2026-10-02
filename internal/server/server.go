@@ -59,6 +59,7 @@ type Server struct {
 	importLimit  *limiter
 	previewLimit *limiter
 	acct         accountLimits
+	x            *blockExtras // email sign-up and latest blocks
 }
 
 // New builds a server. editor may be nil when the SPA has not been built.
@@ -81,6 +82,7 @@ func New(cfg *config.Config, st *store.Store, sender mail.Sender, log *slog.Logg
 		previewLimit: newLimiter(60, time.Hour),
 		fetcher:      fetch.New(fetch.Options{}),
 		acct:         newAccountLimits(),
+		x:            newBlockExtras(cfg),
 	}
 }
 
@@ -138,6 +140,9 @@ func (s *Server) mainRoutes() *http.ServeMux {
 	m.HandleFunc("PUT /api/pages/{id}/blocks/order", s.api(s.authed(s.handleReorderBlocks)))
 	m.HandleFunc("PATCH /api/pages/{id}/blocks/{blockID}", s.api(s.authed(s.handleUpdateBlock)))
 	m.HandleFunc("DELETE /api/pages/{id}/blocks/{blockID}", s.api(s.authed(s.handleDeleteBlock)))
+	m.HandleFunc("GET /api/pages/{id}/blocks/{blockID}/contacts", s.api(s.authed(s.handleListContacts)))
+	m.HandleFunc("GET /api/pages/{id}/blocks/{blockID}/contacts.csv", s.api(s.authed(s.handleContactsCSV)))
+	m.HandleFunc("DELETE /api/pages/{id}/blocks/{blockID}/contacts/{contactID}", s.api(s.authed(s.handleDeleteContact)))
 
 	// Domains and uploads
 	m.HandleFunc("POST /api/pages/{id}/domains", s.api(s.authed(s.handleCreateDomain)))
@@ -152,6 +157,7 @@ func (s *Server) mainRoutes() *http.ServeMux {
 
 	// Reports and admin
 	m.HandleFunc("POST /api/report", s.api(s.handleReport))
+	m.HandleFunc("POST /api/subscribe/{id}", s.api(s.handleSubscribe))
 	m.HandleFunc("GET /api/admin/reports", s.api(s.admin(s.handleAdminReports)))
 	m.HandleFunc("POST /api/admin/reports/{id}/resolve", s.api(s.admin(s.handleAdminResolve)))
 	m.HandleFunc("POST /api/admin/pages/{id}/suspend", s.api(s.admin(s.handleAdminSuspendPage)))
@@ -177,6 +183,8 @@ func (s *Server) mainRoutes() *http.ServeMux {
 	m.HandleFunc("GET /vcard/{id}", s.handleVCard)
 	m.HandleFunc("GET /unsubscribe/weekly-stats", s.handleUnsubscribeWeekly)
 	m.HandleFunc("POST /unsubscribe/weekly-stats", s.handleUnsubscribeWeekly)
+	m.HandleFunc("GET /subscribe/confirm", s.handleSubscribeConfirm)
+	m.HandleFunc("POST /subscribe/confirm", s.handleSubscribeConfirm)
 	m.HandleFunc("GET /preview/{id}", s.handlePreview)
 	m.HandleFunc("GET /terms", s.handleTerms)
 	m.HandleFunc("GET /privacy", s.handlePrivacy)
@@ -192,6 +200,7 @@ func (s *Server) customDomainRoutes() *http.ServeMux {
 	m.HandleFunc("POST /t/{id}", s.handleTrack)
 	m.HandleFunc("GET /vcard/{id}", s.handleVCard)
 	m.HandleFunc("POST /api/report", s.api(s.handleReport))
+	m.HandleFunc("POST /api/subscribe/{id}", s.api(s.handleSubscribe))
 	m.HandleFunc("GET /{$}", s.handleCustomDomainPage)
 	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { s.notFoundPage(w) })
 	return m

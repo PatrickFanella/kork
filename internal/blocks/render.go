@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	"git.subcult.tv/subculture-collective/zelda/internal/catalog"
 	"git.subcult.tv/subculture-collective/zelda/internal/icons"
@@ -36,6 +37,13 @@ type Item struct {
 	EmbedTitle  string
 	EmbedHeight int // fixed pixel height; 0 means 16:9
 	Track       bool
+	// Button is the submit label of a sign-up form.
+	Button string
+	// Events lists upcoming dates for an events block.
+	Events []EventView
+	// Date and Datetime show when a latest item was published.
+	Date     string
+	Datetime string
 }
 
 // Context carries per-request rendering inputs.
@@ -45,6 +53,10 @@ type Context struct {
 	QRFG      string
 	QRBG      string
 	VCardURL  func(blockID string) string
+	// Now hides past events; zero means time.Now().
+	Now time.Time
+	// Latest returns the cached newest item for a latest block.
+	Latest func(blockID string) (LatestItem, bool)
 }
 
 // Block is the stored form the renderer consumes.
@@ -62,6 +74,7 @@ func Build(ctx Context, list []Block) []Item {
 		if it, ok := build(ctx, b); ok {
 			it.ID, it.Type = b.ID, b.Type
 			switch {
+			case it.Kind != "":
 			case b.Type == "heading", b.Type == "text", b.Type == "divider", b.Type == "image", b.Type == "embed", b.Type == "qr":
 				it.Kind = b.Type
 			case it.Href == "" && it.Copy != "":
@@ -84,6 +97,9 @@ func (c Context) qrSVG(data string) template.HTML {
 }
 
 func build(ctx Context, b Block) (Item, bool) {
+	if it, ok, handled := buildNew(ctx, b); handled {
+		return it, ok
+	}
 	switch b.Type {
 	case "link":
 		var d Link

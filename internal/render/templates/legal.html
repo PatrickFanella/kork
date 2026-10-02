@@ -98,7 +98,8 @@
   <li>images you upload, with their type and size;</li>
   <li>daily totals of views and clicks for your pages (see below);</li>
   <li>a record of each signed-in session, and single-use links for email confirmation, password reset and email changes. These are stored as hashes and expire;</li>
-  <li>a new email address you asked to switch to, until you confirm it.</li>
+  <li>a new email address you asked to switch to, until you confirm it;</li>
+  <li>email addresses collected by your sign-up blocks, and your Brevo API key if you send sign-ups to Brevo (encrypted, and never shown again after you enter it).</li>
 </ul>
 
 <h2>If you visit a page</h2>
@@ -112,6 +113,9 @@
   <li>If you report a page, we store the page, the reason and the details you write, but not who sent it.</li>
 </ul>
 
+<h2>If you join a page's mailing list</h2>
+<p>When you enter your email address in a page's sign-up form, we store it and email you a confirmation link. If you don't confirm within 48 hours, we delete it. Once you confirm, the address belongs to the page owner's list: either we keep it so the owner can see and download it, or we send it to the owner's own Brevo account and delete our copy. The owner decides which, and is responsible for how they use the list; ask them to remove you. The page owner can delete your address at any time, and it is deleted with their account.</p>
+
 <h2>Cookies</h2>
 <p>{{.AppName}} sets one cookie, <code>zelda_session</code>, and only when you sign in to the editor. It keeps you signed in for up to 30 days or until you sign out. Public pages set no cookies. There are no analytics or advertising cookies.</p>
 
@@ -121,17 +125,17 @@
 <h2>Services that handle data for us</h2>
 <ul>
   <li><strong>Cloudflare</strong> carries all traffic to {{.AppName}}. It sees visitors' IP addresses and request details in order to deliver pages.</li>
-  <li><strong>Brevo</strong> sends account emails (confirmation, password reset and email change), so it receives your email address and the message.</li>
+  <li><strong>Brevo</strong> sends account emails (confirmation, password reset and email change) and mailing-list confirmation links, so it receives the recipient's email address and the message.</li>
   <li>{{.AppName}} runs on a server operated by SUBCULT. The database and uploaded images are stored there.</li>
 </ul>
 <p>We don't sell your data and {{.AppName}} has no ads.</p>
 
 <h2>How long we keep it</h2>
-<p>We keep account data for as long as the account exists. When you delete your account, your pages, blocks, domains, uploaded images, stats, sessions and email address are removed immediately. Deleted data can remain in our backups until they rotate out: we keep 14 nightly copies, so about two weeks.</p>
+<p>We keep account data for as long as the account exists. When you delete your account, your pages, blocks, domains, uploaded images, stats, mailing-list addresses, sessions and email address are removed immediately. Deleted data can remain in our backups until they rotate out: we keep 14 nightly copies, so about two weeks.</p>
 
 <h2>Your choices</h2>
 <ul>
-  <li><strong>Download your data:</strong> Settings &rarr; Download my data gives you a ZIP with your account details, pages, blocks, domains, themes, stats and uploaded images.</li>
+  <li><strong>Download your data:</strong> Settings &rarr; Download my data gives you a ZIP with your account details, pages, blocks, domains, themes, stats, mailing-list addresses and uploaded images.</li>
   <li><strong>Correct it:</strong> edit your pages any time, and change your email or password in Settings.</li>
   <li><strong>Delete it:</strong> Settings &rarr; Delete account.</li>
   <li>For anything else, write to <a href="mailto:{{.ContactEmail}}">{{.ContactEmail}}</a>.</li>
