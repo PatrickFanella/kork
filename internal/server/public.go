@@ -221,7 +221,7 @@ func safeFilename(name string) string {
 	return out
 }
 
-var reportReasons = map[string]bool{"spam": true, "scam": true, "impersonation": true, "illegal": true, "other": true}
+var reportReasons = map[string]bool{"spam": true, "scam": true, "impersonation": true, "phishing": true, "illegal": true, "other": true}
 
 func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	if !s.reportLimit.allow(s.clientIP(r)) {

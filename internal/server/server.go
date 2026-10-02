@@ -20,6 +20,7 @@ import (
 	"git.subcult.tv/subculture-collective/zelda/internal/config"
 	"git.subcult.tv/subculture-collective/zelda/internal/mail"
 	"git.subcult.tv/subculture-collective/zelda/internal/render"
+	"git.subcult.tv/subculture-collective/zelda/internal/screen"
 	"git.subcult.tv/subculture-collective/zelda/internal/store"
 )
 
@@ -40,6 +41,11 @@ type Server struct {
 	editor   fs.FS            // built SPA (web/dist)
 	now      func() time.Time // clock for block schedules; replaced in tests
 
+	// screener checks link destinations; nil means screening is off.
+	screener  screen.Screener
+	safeTTL   time.Duration // how long a safe verdict is cached; 0 disables
+	unsafeTTL time.Duration
+
 	signupLimit  *limiter
 	loginIPLimit *limiter
 	loginLimit   *limiter
@@ -58,6 +64,7 @@ func New(cfg *config.Config, st *store.Store, sender mail.Sender, log *slog.Logg
 	}
 	return &Server{
 		cfg: cfg, store: st, mail: sender, log: log, resolver: net.DefaultResolver, editor: editor, now: time.Now,
+		safeTTL: 24 * time.Hour, unsafeTTL: 7 * 24 * time.Hour,
 		signupLimit:  newLimiter(5, time.Hour),
 		loginIPLimit: newLimiter(30, 15*time.Minute),
 		loginLimit:   newLimiter(10, 15*time.Minute),
@@ -137,6 +144,8 @@ func (s *Server) mainRoutes() *http.ServeMux {
 	m.HandleFunc("POST /api/admin/reports/{id}/resolve", s.api(s.admin(s.handleAdminResolve)))
 	m.HandleFunc("POST /api/admin/pages/{id}/suspend", s.api(s.admin(s.handleAdminSuspendPage)))
 	m.HandleFunc("POST /api/admin/users/{id}/suspend", s.api(s.admin(s.handleAdminSuspendUser)))
+	m.HandleFunc("GET /api/admin/users/pending", s.api(s.admin(s.handleAdminPendingUsers)))
+	m.HandleFunc("POST /api/admin/users/{id}/trust", s.api(s.admin(s.handleAdminTrustUser)))
 	m.HandleFunc("/api/", s.api(func(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "not_found", "no such endpoint", "")
 	}))
