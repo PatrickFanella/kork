@@ -64,6 +64,23 @@ Ports 80 and 443 must reach Caddy for ACME. If the service sits behind an existi
 
 Admins are the addresses in `ZELDA_ADMIN_EMAILS`, once verified. Without SMTP, verify an account by hand: `UPDATE users SET email_verified_at = now() WHERE lower(email) = '...'`.
 
+### Backups and restore
+
+`scripts/backup.sh` writes `database.dump` (pg_dump custom format, checked with `pg_restore --list`), `uploads.tar.gz`, row counts and checksums to `backups/<timestamp>/`, keeps the newest `KEEP` (14), and with `REMOTE=host:/path` copies each backup there and verifies its checksums. Set `NTFY_URL` to get failure alerts. Run it from cron or a systemd timer.
+
+To restore into a stopped deployment:
+
+```bash
+docker compose -p zelda -f docker-compose.proxy.yml up -d postgres
+docker compose -p zelda -f docker-compose.proxy.yml exec -T postgres \
+  pg_restore -U zelda -d zelda --clean --if-exists --no-owner < backups/<stamp>/database.dump
+docker run --rm -v zelda_uploads:/data -v "$PWD/backups/<stamp>:/b:ro" postgres:17-alpine \
+  sh -c 'tar -xzf /b/uploads.tar.gz -C /data && chown -R 65532:65532 /data/uploads'
+docker compose -p zelda -f docker-compose.proxy.yml up -d zelda
+```
+
+The `.env` file is not backed up; recreate it from `.env.example` (a new `POSTGRES_PASSWORD` is fine when restoring into a fresh volume).
+
 ### Abuse controls
 
 - Email verification before publishing.
