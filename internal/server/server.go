@@ -158,6 +158,8 @@ func (s *Server) mainRoutes() *http.ServeMux {
 	m.HandleFunc("POST /api/admin/users/{id}/suspend", s.api(s.admin(s.handleAdminSuspendUser)))
 	m.HandleFunc("GET /api/admin/users/pending", s.api(s.admin(s.handleAdminPendingUsers)))
 	m.HandleFunc("POST /api/admin/users/{id}/trust", s.api(s.admin(s.handleAdminTrustUser)))
+	m.HandleFunc("GET /api/admin/users", s.api(s.admin(s.handleAdminUsers)))
+	m.HandleFunc("POST /api/admin/users/{id}/plan", s.api(s.admin(s.handleAdminSetPlan)))
 
 	// Account settings
 	m.HandleFunc("GET /api/account/settings", s.api(s.authed(s.handleGetAccountSettings)))

@@ -22,6 +22,7 @@ import (
 	"git.subcult.tv/subculture-collective/zelda/internal/config"
 	"git.subcult.tv/subculture-collective/zelda/internal/db"
 	"git.subcult.tv/subculture-collective/zelda/internal/mail"
+	"git.subcult.tv/subculture-collective/zelda/internal/plans"
 	"git.subcult.tv/subculture-collective/zelda/internal/store"
 )
 
@@ -374,6 +375,10 @@ func TestEndToEnd(t *testing.T) {
 		ID, TXTName, TXTValue string `json:"-"`
 	}
 	var domRaw map[string]any
+	if code := alice.do("POST", "/api/pages/"+pid+"/domains", map[string]string{"hostname": "Links.Alice.Example"}, &ae); code != 403 || ae.Error.Code != "upgrade_required" {
+		t.Fatalf("free account added a domain: %d %+v", code, ae)
+	}
+	alice.setPlan(plans.Pro, nil)
 	if code := alice.do("POST", "/api/pages/"+pid+"/domains", map[string]string{"hostname": "Links.Alice.Example"}, &domRaw); code != 201 {
 		t.Fatalf("add domain: %d %v", code, domRaw)
 	}

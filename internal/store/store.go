@@ -235,36 +235,10 @@ func scanPage(row pgx.Row) (*Page, error) {
 // Live reports whether the public may see the page.
 func (p *Page) Live() bool { return p.Published && !p.Suspended && !p.OwnerSuspended }
 
+// CreatePage inserts a page within the default MaxPages limit. Handlers use
+// CreatePageLimit with the owner's plan limit.
 func (s *Store) CreatePage(ctx context.Context, userID, slug, title string, theme json.RawMessage) (*Page, error) {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-	// Serialize page creation per user so the limit cannot be raced.
-	if _, err := tx.Exec(ctx, `SELECT 1 FROM users WHERE id = $1 FOR UPDATE`, userID); err != nil {
-		return nil, err
-	}
-	var n int
-	if err := tx.QueryRow(ctx, `SELECT count(*) FROM pages WHERE user_id = $1`, userID).Scan(&n); err != nil {
-		return nil, err
-	}
-	if n >= MaxPages {
-		return nil, ErrLimit
-	}
-	var id string
-	err = tx.QueryRow(ctx, `INSERT INTO pages (user_id, slug, title, theme) VALUES ($1, $2, $3, $4) RETURNING id`,
-		userID, slug, title, theme).Scan(&id)
-	if err != nil {
-		if isUnique(err) {
-			return nil, ErrConflict
-		}
-		return nil, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, err
-	}
-	return s.PageByID(ctx, id)
+	return s.CreatePageLimit(ctx, userID, slug, title, theme, MaxPages)
 }
 
 func (s *Store) PageByID(ctx context.Context, id string) (*Page, error) {
