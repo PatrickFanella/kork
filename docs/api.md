@@ -57,7 +57,7 @@ All endpoints need a session except `email/confirm`.
 | POST | `/api/account/email` | `{email, password}` | `202 Account` with `pending_email` set. Emails a link to the new address and a notice to the old one. `409 email_taken` if another account uses it. |
 | POST | `/api/account/email/confirm` | `{token}` | `200 {user}`. Switches the email and marks it verified. `400 invalid_token`; `409 email_taken` if the address was taken meanwhile. |
 | GET | `/api/account/export` | – | `200 application/zip` download (see below). 5 per hour per account, then `429`. |
-| DELETE | `/api/account` | `{password}` | `204` and the session cookie is cleared. |
+| DELETE | `/api/account` | `{password}` | `204` and the session cookie is cleared. A Stripe subscription that could still charge is canceled first; if Stripe doesn't answer, `502 billing_unavailable` and nothing is deleted. |
 
 `Account`: `{user, pending_email: string|null, terms_version: string|null, terms_accepted_at: string|null}`. Accounts created before terms existed have `null` terms fields and are not asked to accept.
 
@@ -67,7 +67,7 @@ The email-change link is `/app/confirm-email?token=...` and expires after 24 hou
 
 The export ZIP holds `account.json` (`exported_at, email, email_verified, created_at, terms_version, terms_accepted_at, pages: [Page fields + blocks, domains: [{hostname, verified, created_at}], stats: [{block_id, day, count}]], uploads: [{id, content_type, size, file}]`) and each uploaded image at its `file` path (`uploads/<id>.<ext>`). Stats rows with the zero block ID are page views.
 
-Deleting an account removes the user, sessions, tokens, pending email changes, uploads rows and files, pages, blocks, domains, reports about those pages and stats. Its public pages return 404.
+Deleting an account removes the user, billing state (including the Patreon connection), sessions, tokens, pending email changes, uploads rows and files, pages, blocks, domains, reports about those pages and stats. Its public pages return 404.
 
 ## Catalog
 
@@ -315,7 +315,7 @@ The page image (`og:image`, then `twitter:image`) is downloaded and stored as th
 | GET | `/api/admin/users/pending` | – | `200 [{id, email, email_verified, created_at, publish_unlocks_at, pages: [slug]}]`: accounts still inside the publish gate |
 | POST | `/api/admin/users/{id}/trust` | – | `204`; the account can publish now |
 | GET | `/api/admin/users?q=&limit=50` | – | `200 [AdminUser]`: accounts whose email contains `q` (case-insensitive), Pro first, then newest. `limit` is 1–200. |
-| POST | `/api/admin/users/{id}/plan` | `{plan: "free" or "pro", expires_at?: RFC 3339 or null}` | `200 Plan` for that user. Grants or revokes Pro by hand (`source: "manual"`). `expires_at` must be in the future; omitted or `null` means no expiry. `free` clears the source and expiry. |
+| POST | `/api/admin/users/{id}/plan` | `{plan: "free" or "pro", expires_at?: RFC 3339 or null}` | `200 Plan` for that user. Sets or clears the manual Pro grant. `expires_at` must be in the future; omitted or `null` means no expiry. `free` removes only the manual grant: an account with an active Stripe or Patreon grant stays Pro (see Billing). |
 
 `AdminUser`: `{id, email, email_verified, suspended, created_at, plan, plan_source, plan_expires_at, effective_plan, domains_grace_until, pages}`. `plan` is the stored plan; `effective_plan` is `free` once a Pro grant has expired.
 
@@ -325,7 +325,7 @@ Every 6 hours the server re-screens published pages (200 per pass, least recentl
 
 ## Plans
 
-Every account is `free` or `pro`. Admins grant Pro by hand for now; billing will set `source` to `patreon` or `stripe` later. A Pro grant can have an expiry, after which the account acts as Free. All limits are in one table in `internal/plans/plans.go`. The values are placeholders until the owner sets pricing.
+Every account is `free` or `pro`. Pro comes from an admin grant (`manual`), a Stripe subscription (`stripe`) or a Patreon membership (`patreon`); see Billing. A Pro grant can have an expiry, after which the account acts as Free. All limits are in one table in `internal/plans/plans.go`. The values are placeholders until the owner sets pricing.
 
 | | Free | Pro |
 |---|---|---|
@@ -352,7 +352,7 @@ Every account is `free` or `pro`. Admins grant Pro by hand for now; billing will
 }
 ```
 
-`plan`, the limits and `features` describe what the account can use now. `stored_plan`, `source` and `expires_at` describe the grant. `pro` lists Pro's limits for upgrade prompts. Plan changes apply on the next request, so the editor unlocks as soon as an admin grants Pro.
+`plan`, the limits and `features` describe what the account can use now. `stored_plan`, `source` and `expires_at` describe the grant. `pro` lists Pro's limits for upgrade prompts. Plan changes apply on the next request, so the editor unlocks as soon as an admin, Stripe or Patreon grants Pro.
 
 A request for something the plan doesn't include returns `403`:
 
@@ -361,6 +361,63 @@ A request for something the plan doesn't include returns `403`:
 ```
 
 `feature` is one of the keys above, or `pages`.
+
+## Billing
+
+Stripe subscriptions and the Patreon unlock are optional. Each is off until all its settings are present (see `docs/billing.md`); while off, its endpoints return `404` and `GET /api/billing` reports `enabled: false`.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/billing` | – | `200 Billing` |
+| POST | `/api/billing/checkout` | `{interval: "month" or "year"}` | `200 {url}`: a Stripe Checkout page to send the browser to. `422` field `interval`; `409 already_subscribed` while a subscription is active, past due, unpaid or paused (use the portal); `502 billing_unavailable` if Stripe fails. |
+| POST | `/api/billing/portal` | – | `200 {url}`: the Stripe Customer Portal. `409 no_billing_account` before the first checkout. |
+| GET | `/api/billing/patreon/connect` | – | `302` to Patreon's authorize page. Navigate the browser here. |
+| POST | `/api/billing/patreon/callback` | `{code, state}` | `200 Billing`. `400 bad_state` if the state is invalid, older than 15 minutes or from another session; `400 patreon_denied` if Patreon rejects the code; `409 patreon_in_use` if that Patreon account is connected to another Kork account. |
+| DELETE | `/api/billing/patreon` | – | `200 Billing`. Removes the connection and the Pro it granted. |
+| POST | `/stripe/webhook` | Stripe event | See below. No session or CSRF header. |
+
+Checkout, portal and Patreon connect are limited to 20 per hour per account (`429`).
+
+`Billing`:
+
+```json
+{
+  "stripe": {
+    "enabled": true, "price_monthly": "$5", "price_annual": "$48",
+    "status": "active", "interval": "year", "current_period_end": "2027-10-02T12:00:00Z",
+    "cancel_at_period_end": false, "payment_failed": false, "subscribed": true, "can_manage": true
+  },
+  "patreon": {
+    "enabled": true, "connected": true, "entitled": true, "patron_status": "active_patron",
+    "checked_at": "2026-10-02T12:00:00Z", "pro_until": "2026-10-10T12:00:00Z", "grace_until": null, "reconnect": false
+  }
+}
+```
+
+`status` is Stripe's subscription status. `interval` is set when the price is one of the configured prices. `payment_failed` is set by `invoice.payment_failed` and cleared when the subscription is active again. `grace_until` is set while Pro continues after a lost Patreon membership. `reconnect` means Patreon no longer accepts the stored authorization.
+
+### Plan sources
+
+The `billing` table keeps each source's grant separately: the manual grant (with optional expiry), the Stripe grant and the Patreon grant. After any change the stored plan is recomputed (`plans.Resolve`): the account is Pro if any source grants it, and the grant that lasts longest sets `source` and `expires_at`. An expired grant still counts, so the custom-domain grace period applies. Ties prefer manual, then Stripe, then Patreon.
+
+Stripe grant by subscription status:
+
+| Status | Pro until |
+|---|---|
+| `active`, `trialing` | current period end + 24 hours |
+| `past_due` | the same; Stripe is retrying the payment |
+| `canceled`, `unpaid`, `incomplete_expired`, `paused` | current period end, never later than the previous grant; none if there was no previous grant |
+| `incomplete`, anything else | no grant |
+
+Patreon grant: a membership qualifies when `patron_status` is `active_patron` and one of its `currently_entitled_tiers` is in `ZELDA_PATREON_TIER_IDS` (in the campaign `ZELDA_PATREON_CAMPAIGN_ID`). A qualifying check grants Pro for 8 days (7-day grace plus one day between checks). Connected accounts are re-checked daily; the check refreshes the token and reads the membership again. When a check finds no qualifying membership, or Patreon rejects the refresh token, Pro continues for 7 days from that check and is then dropped. A later qualifying check or reconnect restores it. Network or Patreon errors change nothing and are retried hourly.
+
+### Stripe webhook
+
+`POST /stripe/webhook` checks the `Stripe-Signature` header as Stripe documents: the HMAC-SHA256 of `"{t}.{raw body}"` keyed with `ZELDA_STRIPE_WEBHOOK_SECRET` must match one of the `v1` signatures, and `t` must be within 5 minutes of the server clock. Otherwise `400`.
+
+Handled events: `checkout.session.completed` (links the customer and subscription to `client_reference_id`, then reads the subscription from the API), `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted` and `invoice.payment_failed`. Other types are acknowledged and ignored. Each event ID is applied once; repeats return `200` without changes. Subscription events older than the newest one applied are skipped. Events for unknown customers are acknowledged. A processing error returns `500` so Stripe retries. Event IDs are kept for 30 days.
+
+Both API versions are read: `current_period_end` on the subscription (before 2025-03-31) or on its items (later), and an invoice's subscription at `subscription` or `parent.subscription_details.subscription`.
 
 ### When Pro ends
 
