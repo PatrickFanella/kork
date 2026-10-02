@@ -117,6 +117,8 @@ func (s *Server) renderPage(w http.ResponseWriter, r *http.Request, p *store.Pag
 		QRFG:      "#000000",
 		QRBG:      "#ffffff",
 		VCardURL:  func(id string) string { return "/vcard/" + id },
+		Now:       now,
+		Latest:    s.latestItems(r.Context(), p, list),
 	}
 	n := nonce()
 	view := render.Page{

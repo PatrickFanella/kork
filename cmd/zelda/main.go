@@ -74,9 +74,23 @@ func run(log *slog.Logger) error {
 		RetentionDays: cfg.StatsRetentionDays}
 	go jobs.Run(ctx, time.Hour)
 	app := server.New(cfg, st, sender, log, editor)
+	go app.RunSignupJobs(ctx, 15*time.Minute)
+	if len(cfg.SecretKey) == 0 {
+		log.Warn("ZELDA_SECRET_KEY not set: email sign-up blocks can only keep lists in Kork, not send them to Brevo")
+	}
 	if sc := screener(ctx, cfg, log); sc != nil {
 		app.SetScreener(sc)
 		go app.RunRechecks(ctx, 6*time.Hour)
+	}
+	switch {
+	case !cfg.CustomDomains:
+	case cfg.CloudflareDomains():
+		log.Info("custom domains: Cloudflare for SaaS", "target", cfg.DomainTarget)
+		go app.RunDomainRefresh(ctx, 10*time.Minute)
+	case cfg.CloudflareToken != "" || cfg.CloudflareZoneID != "":
+		log.Warn("custom domains: set both ZELDA_CLOUDFLARE_TOKEN and ZELDA_CLOUDFLARE_ZONE_ID to use Cloudflare; using DNS checks and on-demand TLS")
+	default:
+		log.Info("custom domains: DNS checks and on-demand TLS", "target", cfg.DomainTarget)
 	}
 	if cfg.PublishMinAge > 0 {
 		log.Info("new accounts can publish after", "min_age", cfg.PublishMinAge.String())

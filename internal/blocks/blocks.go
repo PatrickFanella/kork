@@ -289,8 +289,17 @@ func Validate(typ string, raw json.RawMessage, owns UploadChecker) (json.RawMess
 			return nil, err
 		}
 		out = b
+	case "email_signup":
+		out, err = validateSignup(raw)
+	case "events":
+		out, err = validateEvents(raw)
+	case "latest":
+		out, err = validateLatest(raw)
 	default:
 		return nil, fieldErr("type", "unknown block type")
+	}
+	if err != nil {
+		return nil, err
 	}
 	return json.Marshal(out)
 }
@@ -351,6 +360,12 @@ func Label(typ string, raw json.RawMessage) string {
 		return b.Address
 	case "divider":
 		return "Divider"
+	case "email_signup":
+		return signupLabel(raw)
+	case "events":
+		return eventsLabel(raw)
+	case "latest":
+		return latestLabel(raw)
 	}
 	return typ
 }

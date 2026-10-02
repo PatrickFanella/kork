@@ -36,6 +36,9 @@ const PATHS = {
   refresh: "M20 11a8 8 0 10-2.3 5.7M20 4v7h-7",
   menu: "M4 7h16M4 12h16M4 17h16",
   sun: "M12 8a4 4 0 100 8 4 4 0 000-8z",
+  mail: "M4 6h16v12H4zM4 7l8 6 8-6",
+  calendar: "M4 6h16v14H4zM4 10h16M8 3v5M16 3v5",
+  rss: "M5 19h.01M5 12a7 7 0 017 7M5 5a14 14 0 0114 14",
 } as const;
 
 export type IconName = keyof typeof PATHS;
@@ -73,4 +76,7 @@ export const BLOCK_ICONS: Record<string, IconName> = {
   copy: "copy",
   contact: "contact",
   map: "map",
+  email_signup: "mail",
+  events: "calendar",
+  latest: "rss",
 };

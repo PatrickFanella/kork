@@ -45,7 +45,8 @@
   <section class="message">
     <h1>{{.Heading}}</h1>
     <p class="lede">{{.Message}}</p>
-    <p class="actions"><a class="cta" href="/">Go home</a></p>
+    {{if .Form}}<form method="post" action="{{.Form.Action}}" class="actions"><input type="hidden" name="token" value="{{.Form.Token}}"><button type="submit" class="cta">{{.Form.Button}}</button></form>
+    {{else}}<p class="actions"><a class="cta" href="/">Go home</a></p>{{end}}
   </section>
   {{end}}
 </main>

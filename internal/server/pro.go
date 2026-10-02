@@ -196,14 +196,6 @@ func (s *Server) proStyleFor(ctx context.Context, p *store.Page, theme catalog.T
 
 // ---- stats export ----
 
-// csvCell neutralizes spreadsheet formulas in user-controlled text.
-func csvCell(v string) string {
-	if v != "" && strings.ContainsRune("=+-@\t\r", rune(v[0])) {
-		return "'" + v
-	}
-	return v
-}
-
 // handleStatsCSV streams the page's daily aggregates as one CSV table with
 // the columns date, metric, key, label, count. metric is views, clicks,
 // referrer or country. Needs the stats_export feature; days is capped like

@@ -177,6 +177,7 @@ func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &body) || !s.confirmPassword(w, u, body.Password, "password") {
 		return
 	}
+	s.domains.Release(r.Context(), "", u.ID)
 	uploads, err := s.store.DeleteUser(r.Context(), u.ID)
 	if err != nil {
 		s.serverErr(w, r, err)
@@ -200,6 +201,9 @@ type exportPage struct {
 	Stats   []store.StatRow `json:"stats"`
 	// CustomCSS is the stored, sanitized custom CSS.
 	CustomCSS string `json:"custom_css"`
+	// SignupContacts are confirmed addresses on the page's email sign-up
+	// blocks that are kept in Kork.
+	SignupContacts []store.SignupContact `json:"signup_contacts"`
 }
 
 type exportDomain struct {
@@ -290,6 +294,10 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if ep.CustomCSS, err = s.store.PageCSS(ctx, p.ID); err != nil {
+			s.serverErr(w, r, err)
+			return
+		}
+		if ep.SignupContacts, err = s.store.PageSignupContacts(ctx, p.ID); err != nil {
 			s.serverErr(w, r, err)
 			return
 		}
