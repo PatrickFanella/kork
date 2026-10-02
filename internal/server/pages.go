@@ -312,6 +312,9 @@ func (s *Server) handleUpdatePage(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusForbidden, "email_unverified", "confirm your email address before publishing", "published")
 			return
 		}
+		if *body.Published && !p.Published && !s.allowPublish(w, r, u, p) {
+			return
+		}
 		p.Published = *body.Published
 	}
 	if err := s.store.UpdatePage(r.Context(), p); errors.Is(err, store.ErrConflict) {
@@ -414,6 +417,9 @@ func (s *Server) handleCreateBlock(w http.ResponseWriter, r *http.Request) {
 		s.writeBlockErr(w, err)
 		return
 	}
+	if s.rejectBlocked(w, r, body.Type, data) {
+		return
+	}
 	enabled := body.Enabled == nil || *body.Enabled
 	b, err := s.store.CreateBlock(r.Context(), p.ID, body.Type, data, enabled)
 	if errors.Is(err, store.ErrLimit) {
@@ -457,6 +463,9 @@ func (s *Server) handleUpdateBlock(w http.ResponseWriter, r *http.Request) {
 		data, err := blocks.Validate(b.Type, body.Data, s.uploadChecker(r))
 		if err != nil {
 			s.writeBlockErr(w, err)
+			return
+		}
+		if s.rejectBlocked(w, r, b.Type, data) {
 			return
 		}
 		b.Data = data

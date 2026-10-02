@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -27,6 +28,15 @@ type Config struct {
 	AdminEmails map[string]bool
 	// CustomDomains enables attaching user domains (needs on-demand TLS in front).
 	CustomDomains bool
+
+	// SafeBrowsingKey enables Google Safe Browsing checks of link destinations.
+	SafeBrowsingKey string
+	// BlocklistFile is a local host/URL blocklist; BlocklistURL refreshes it daily.
+	BlocklistFile string
+	BlocklistURL  string
+	// PublishMinAge is how old an account must be before it can publish,
+	// unless an admin approves it. Zero disables the gate.
+	PublishMinAge time.Duration
 
 	SMTPHost string
 	SMTPPort int
@@ -62,6 +72,19 @@ func Load() (*Config, error) {
 	for _, e := range strings.FieldsFunc(env("ZELDA_ADMIN_EMAILS", ""), func(r rune) bool { return r == ',' || r == ' ' }) {
 		c.AdminEmails[strings.ToLower(e)] = true
 	}
+	c.SafeBrowsingKey = env("ZELDA_SAFE_BROWSING_KEY", "")
+	c.BlocklistFile = env("ZELDA_BLOCKLIST_FILE", "")
+	c.BlocklistURL = env("ZELDA_BLOCKLIST_URL", "")
+	if c.BlocklistURL != "" {
+		if u, err := url.Parse(c.BlocklistURL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+			return nil, errors.New("ZELDA_BLOCKLIST_URL must be an absolute http(s) URL")
+		}
+	}
+	age, err := time.ParseDuration(env("ZELDA_PUBLISH_MIN_ACCOUNT_AGE", "24h"))
+	if err != nil || age < 0 {
+		return nil, errors.New("ZELDA_PUBLISH_MIN_ACCOUNT_AGE must be a duration such as 24h, or 0 to disable")
+	}
+	c.PublishMinAge = age
 	port, err := strconv.Atoi(env("ZELDA_SMTP_PORT", "587"))
 	if err != nil {
 		return nil, errors.New("ZELDA_SMTP_PORT must be a number")
