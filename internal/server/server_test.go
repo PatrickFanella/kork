@@ -204,13 +204,13 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatalf("weak password: %d %+v", code, ae)
 	}
 	var me struct{ User store.User }
-	if code := alice.do("POST", "/api/auth/signup", map[string]string{"email": "Alice@example.com", "password": "correct horse battery"}, &me); code != 201 {
+	if code := alice.do("POST", "/api/auth/signup", map[string]any{"email": "Alice@example.com", "password": "correct horse battery", "accept_terms": true}, &me); code != 201 {
 		t.Fatalf("signup: %d", code)
 	}
 	if me.User.IsAdmin || me.User.EmailVerified {
 		t.Fatalf("listed admin must not get admin before verifying: %+v", me.User)
 	}
-	if code := e.client().do("POST", "/api/auth/signup", map[string]string{"email": "alice@EXAMPLE.com", "password": "correct horse battery"}, &ae); code != 409 {
+	if code := e.client().do("POST", "/api/auth/signup", map[string]any{"email": "alice@EXAMPLE.com", "password": "correct horse battery", "accept_terms": true}, &ae); code != 409 {
 		t.Fatalf("duplicate email: %d", code)
 	}
 
@@ -336,7 +336,7 @@ func TestEndToEnd(t *testing.T) {
 
 	// Another user can't see or edit Alice's page.
 	bob := e.client()
-	bob.do("POST", "/api/auth/signup", map[string]string{"email": "bob@example.com", "password": "correct horse battery"}, nil)
+	bob.do("POST", "/api/auth/signup", map[string]any{"email": "bob@example.com", "password": "correct horse battery", "accept_terms": true}, nil)
 	if code := bob.do("GET", "/api/pages/"+page.ID, nil, &ae); code != 404 {
 		t.Fatalf("bob read: %d", code)
 	}
