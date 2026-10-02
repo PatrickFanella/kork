@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
+<channel>
+  <title>Alice's notes</title>
+  <link>https://alice.example/</link>
+  <atom:link href="https://alice.example/feed.xml" rel="self" type="application/rss+xml"/>
+  <description>Notes on printing.</description>
+  <item>
+    <title>Second post</title>
+    <atom:link href="https://alice.example/feed.xml" rel="self"/>
+    <link>/posts/second</link>
+    <guid isPermaLink="false">post-2</guid>
+    <pubDate>Tue, 29 Sep 2026 09:30:00 +0000</pubDate>
+    <media:title>Not the title</media:title>
+    <enclosure url="/img/second.png" type="image/png" length="1234"/>
+  </item>
+  <item>
+    <title>Newest post &amp; more&nbsp;notes</title>
+    <link>https://alice.example/posts/newest</link>
+    <guid>https://alice.example/posts/newest</guid>
+    <pubDate>Thu, 1 Oct 2026 18:00:00 -0500</pubDate>
+    <media:content url="https://cdn.alice.example/newest.jpg" medium="image"/>
+  </item>
+  <item>
+    <title>First post</title>
+    <link>https://alice.example/posts/first</link>
+    <pubDate>Mon, 07 Sep 2026 12:00:00 GMT</pubDate>
+  </item>
+</channel>
+</rss>

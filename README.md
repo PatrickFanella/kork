@@ -54,7 +54,8 @@ The end-to-end test (`internal/server/server_test.go`) drops and recreates the s
 
 1. Point `ZELDA_HOST` (for example `links.subcult.tv`) at the Caddy host.
 2. Custom domains: the user adds a hostname in the editor, creates the TXT record `_zelda.<host>` and a CNAME to `ZELDA_DOMAIN_TARGET`, then presses Verify. The app checks both records. Caddy issues a certificate on the first request after asking `/internal/tls-ask`, which approves only verified domains. Caddy blocks `/internal/*` from outside, and the app answers it only for private-network callers.
-3. Configure SMTP before opening signups. Unverified accounts can build pages but can't publish them.
+3. Configure SMTP before opening signups. Unverified accounts can build pages but can't publish them. Email sign-up blocks also use it for visitors' confirmation links.
+4. Set `ZELDA_SECRET_KEY` (`openssl rand -base64 32`) to let email sign-up blocks send addresses to a creator's own Brevo list. It encrypts their Brevo API keys at rest. Without it, sign-up lists can only be kept in Kork.
 
 Stats are daily totals per page: views, clicks, referrer domains and countries (from Cloudflare's `CF-IPCountry` header). No IPs, cookies or user agents are stored. An hourly job deletes rows older than `ZELDA_STATS_RETENTION_DAYS` (default 400) and sends the opt-in weekly stats email on Mondays (UTC); the editor shows up to 30 days on Free and 365 on Pro.
 
@@ -63,6 +64,8 @@ Ports 80 and 443 must reach Caddy for ACME. If the service sits behind an existi
 ### Behind an existing proxy
 
 `docker-compose.proxy.yml` runs only Postgres and the app, published on `ZELDA_PUBLISH`. Point the proxy's hostname at that port, set `ZELDA_TRUST_PROXY=true`, and set `ZELDA_CUSTOM_DOMAINS=false` unless the proxy can issue certificates for arbitrary hostnames. The editor then hides the Domains tab.
+
+Behind a Cloudflare tunnel, custom domains can use Cloudflare for SaaS instead: set `ZELDA_CLOUDFLARE_TOKEN` and `ZELDA_CLOUDFLARE_ZONE_ID`, and point `ZELDA_DOMAIN_TARGET` at the zone's customer CNAME target. Adding a domain then creates a Cloudflare custom hostname, and Cloudflare issues the certificate. See `docs/custom-domains-cloudflare.md`.
 
 Plans: accounts are Free or Pro. Pro comes from a Stripe subscription, a SUBCULT Patreon membership, or a grant by hand under Admin → Users; billing setup is in `docs/billing.md`. Limits and Pro features are in `internal/plans/plans.go`; see "Plans" in `docs/api.md`. `ZELDA_FREE_PAGE_LIMIT` (default 5) sets how many pages a Free account can create. Pro stats go back 365 days, so keep `ZELDA_STATS_RETENTION_DAYS` at 365 or more.
 
@@ -83,7 +86,7 @@ docker run --rm -v zelda_uploads:/data -v "$PWD/backups/<stamp>:/b:ro" postgres:
 docker compose -p zelda -f docker-compose.proxy.yml up -d zelda
 ```
 
-The `.env` file is not backed up; recreate it from `.env.example` (a new `POSTGRES_PASSWORD` is fine when restoring into a fresh volume).
+The `.env` file is not backed up; recreate it from `.env.example` (a new `POSTGRES_PASSWORD` is fine when restoring into a fresh volume). Keep a copy of `ZELDA_SECRET_KEY` somewhere safe: Brevo API keys saved in the database can only be decrypted with it, and with a new key creators have to enter theirs again.
 
 ### Terms and privacy
 

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"git.subcult.tv/subculture-collective/zelda/internal/fonts"
 	"git.subcult.tv/subculture-collective/zelda/internal/mail"
 	"git.subcult.tv/subculture-collective/zelda/internal/render"
 	"git.subcult.tv/subculture-collective/zelda/internal/store"
@@ -183,6 +184,7 @@ func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 			"Your subscription couldn't be canceled, so the account was not deleted. Try again in a few minutes.", "")
 		return
 	}
+	s.domains.Release(r.Context(), "", u.ID)
 	uploads, err := s.store.DeleteUser(r.Context(), u.ID)
 	if err != nil {
 		s.serverErr(w, r, err)
@@ -204,6 +206,11 @@ type exportPage struct {
 	Blocks  []*store.Block  `json:"blocks"`
 	Domains []*exportDomain `json:"domains"`
 	Stats   []store.StatRow `json:"stats"`
+	// CustomCSS is the stored, sanitized custom CSS.
+	CustomCSS string `json:"custom_css"`
+	// SignupContacts are confirmed addresses on the page's email sign-up
+	// blocks that are kept in Kork.
+	SignupContacts []store.SignupContact `json:"signup_contacts"`
 }
 
 type exportDomain struct {
@@ -240,6 +247,14 @@ func uploadExt(contentType string) string {
 		return ".gif"
 	case "image/webp":
 		return ".webp"
+	case fonts.WOFF2:
+		return ".woff2"
+	case fonts.WOFF:
+		return ".woff"
+	case fonts.TTF:
+		return ".ttf"
+	case fonts.OTF:
+		return ".otf"
 	}
 	if exts, _ := mime.ExtensionsByType(contentType); len(exts) > 0 {
 		return exts[0]
@@ -282,6 +297,14 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 			ep.Domains = append(ep.Domains, &exportDomain{Hostname: d.Hostname, Verified: d.Verified, CreatedAt: d.CreatedAt})
 		}
 		if ep.Stats, err = s.store.StatRows(ctx, p.ID); err != nil {
+			s.serverErr(w, r, err)
+			return
+		}
+		if ep.CustomCSS, err = s.store.PageCSS(ctx, p.ID); err != nil {
+			s.serverErr(w, r, err)
+			return
+		}
+		if ep.SignupContacts, err = s.store.PageSignupContacts(ctx, p.ID); err != nil {
 			s.serverErr(w, r, err)
 			return
 		}

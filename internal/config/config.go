@@ -30,6 +30,10 @@ type Config struct {
 	AdminEmails map[string]bool
 	// CustomDomains enables attaching user domains (needs on-demand TLS in front).
 	CustomDomains bool
+	// CloudflareToken and CloudflareZoneID switch custom domains to Cloudflare
+	// for SaaS custom hostnames when both are set (see docs/custom-domains-cloudflare.md).
+	CloudflareToken  string
+	CloudflareZoneID string
 	// StatsRetentionDays is how long aggregate stats rows are kept.
 	StatsRetentionDays int
 	// ContactEmail is shown on the terms and privacy pages.
@@ -45,9 +49,8 @@ type Config struct {
 	// PublishMinAge is how old an account must be before it can publish,
 	// unless an admin approves it. Zero disables the gate.
 	PublishMinAge time.Duration
-
-	// SecretKey encrypts secrets at rest (ZELDA_SECRET_KEY, 32 bytes as
-	// base64 or hex). Nil when unset; features that need it stay off.
+	// SecretKey (ZELDA_SECRET_KEY, 32 bytes) encrypts stored third-party API
+	// keys such as a creator's Brevo key. Nil disables features that need it.
 	SecretKey []byte
 
 	// Stripe subscriptions. All four of key, webhook secret and both prices
@@ -101,6 +104,8 @@ func Load() (*Config, error) {
 		ContactEmail: env("ZELDA_CONTACT_EMAIL", "hello@subcult.tv"),
 	}
 	c.CustomDomains = env("ZELDA_CUSTOM_DOMAINS", "true") == "true"
+	c.CloudflareToken = env("ZELDA_CLOUDFLARE_TOKEN", "")
+	c.CloudflareZoneID = env("ZELDA_CLOUDFLARE_ZONE_ID", "")
 	c.AdminEmails = map[string]bool{}
 	for _, e := range strings.FieldsFunc(env("ZELDA_ADMIN_EMAILS", ""), func(r rune) bool { return r == ',' || r == ' ' }) {
 		c.AdminEmails[strings.ToLower(e)] = true
@@ -118,6 +123,13 @@ func Load() (*Config, error) {
 		return nil, errors.New("ZELDA_PUBLISH_MIN_ACCOUNT_AGE must be a duration such as 24h, or 0 to disable")
 	}
 	c.PublishMinAge = age
+	if v := env("ZELDA_SECRET_KEY", ""); v != "" {
+		key, err := seal.ParseKey(v)
+		if err != nil {
+			return nil, errors.New("ZELDA_SECRET_KEY: " + err.Error() + " (generate one with: openssl rand -base64 32)")
+		}
+		c.SecretKey = key
+	}
 	port, err := strconv.Atoi(env("ZELDA_SMTP_PORT", "587"))
 	if err != nil {
 		return nil, errors.New("ZELDA_SMTP_PORT must be a number")
@@ -164,13 +176,6 @@ func (c *Config) PatreonEnabled() bool {
 }
 
 func (c *Config) loadBilling() error {
-	if v := env("ZELDA_SECRET_KEY", ""); v != "" {
-		key, err := seal.ParseKey(v)
-		if err != nil {
-			return err
-		}
-		c.SecretKey = key
-	}
 	c.StripeSecretKey = env("ZELDA_STRIPE_SECRET_KEY", "")
 	c.StripeWebhookSecret = env("ZELDA_STRIPE_WEBHOOK_SECRET", "")
 	c.StripePriceMonthly = env("ZELDA_STRIPE_PRICE_MONTHLY", "")
@@ -211,3 +216,6 @@ func some(vals []string) bool {
 	}
 	return false
 }
+
+// CloudflareDomains reports whether custom domains use Cloudflare for SaaS.
+func (c *Config) CloudflareDomains() bool { return c.CloudflareToken != "" && c.CloudflareZoneID != "" }

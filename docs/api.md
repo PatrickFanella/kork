@@ -11,7 +11,9 @@ The Go service serves everything from one origin:
 | `POST /t/{blockId}` | Click beacon sent by the public page script (links stay direct so `rel="me"` verification works) |
 | `/vcard/{blockId}` | vCard download for a contact block |
 | `/unsubscribe/weekly-stats?token=...` | Signed one-click unsubscribe from the weekly stats email (GET or POST) |
-| `/u/{uploadId}` | Uploaded image |
+| `/subscribe/confirm?token=...` | Email sign-up confirmation: GET shows a button, POST (form field `token`) confirms. Main host only |
+| `POST /api/subscribe/{blockId}` | Public email sign-up submission (see "Email sign-up"); also served on custom domains |
+| `/u/{uploadId}` | Uploaded image or font |
 | `/static/*` | Public page CSS/JS |
 | `/terms`, `/privacy` | Terms of service and privacy policy (server-rendered, main host only) |
 
@@ -65,9 +67,11 @@ Password checks on these endpoints are limited to 10 attempts per 15 minutes per
 
 The email-change link is `/app/confirm-email?token=...` and expires after 24 hours. Requesting another change replaces the pending one. Until confirmation the account keeps its old address.
 
-The export ZIP holds `account.json` (`exported_at, email, email_verified, created_at, terms_version, terms_accepted_at, pages: [Page fields + blocks, domains: [{hostname, verified, created_at}], stats: [{block_id, day, count}]], uploads: [{id, content_type, size, file}]`) and each uploaded image at its `file` path (`uploads/<id>.<ext>`). Stats rows with the zero block ID are page views.
+The export ZIP holds `account.json` (`exported_at, email, email_verified, created_at, terms_version, terms_accepted_at, pages: [Page fields + custom_css, blocks, domains: [{hostname, verified, created_at}], stats: [{block_id, day, count}], signup_contacts: [{id, block_id, email, confirmed_at}]], uploads: [{id, content_type, size, file}]`) and each uploaded image or font at its `file` path (`uploads/<id>.<ext>`). Stats rows with the zero block ID are page views.
 
-Deleting an account removes the user, billing state (including the Patreon connection), sessions, tokens, pending email changes, uploads rows and files, pages, blocks, domains, reports about those pages and stats. Its public pages return 404.
+`signup_contacts` lists confirmed addresses kept in Kork by the page's email sign-up blocks. Brevo API keys are never exported.
+
+Deleting an account removes the user, billing state (including the Patreon connection; a live Stripe subscription is canceled first), sessions, tokens, pending email changes, uploads rows and files, pages, blocks, domains, reports about those pages, stats, and sign-up addresses and Brevo keys. Its public pages return 404.
 
 ## Catalog
 
@@ -92,9 +96,14 @@ Deleting an account removes the user, billing state (including the Patreon conne
   "button_styles": [{"key": "filled", "name": "Filled"}],
   "button_shapes": [{"key": "rounded", "name": "Rounded"}],
   "layouts": [{"key": "stack", "name": "Stacked buttons"}],
-  "embed_providers": ["YouTube", "Vimeo", "Spotify", "SoundCloud", "Twitch", "Apple Music"]
+  "embed_providers": ["YouTube", "Vimeo", "Spotify", "SoundCloud", "Twitch", "Apple Music"],
+  "features": {"custom_domains": true},
+  "domain_mode": "cloudflare",
+  "domain_target": "customers.subcult.tv"
 }
 ```
+
+`domain_mode` is `cloudflare` when the server registers custom domains with Cloudflare for SaaS, otherwise `dns` (see [Domains](#domains)). `domain_target` is the hostname customers point a CNAME at.
 
 `input` is one of `handle | url | text | email | phone`. `copy_only: true` services (Zelle, crypto addresses, Discord usernames) render as a copy button instead of a link.
 
@@ -112,6 +121,8 @@ Categories: `social, video, music, creator, payment, crypto, contact, web`.
 | GET | `/api/slugs/{slug}` | – | `200 {available: bool, reason?: string}` |
 | GET | `/api/pages/{id}/qr.svg` | – | SVG QR code of the public URL |
 | GET | `/api/pages/{id}/stats?days=30` | – | `200 Stats`; `days` defaults to 30 and is capped at the plan's `stats_days` (Free 30, Pro 365) and at `ZELDA_STATS_RETENTION_DAYS` |
+| GET | `/api/pages/{id}/stats.csv?days=30` | – | `200 text/csv` download (Pro, see [Stats CSV](#stats-csv)) |
+| PUT | `/api/pages/{id}/css` | `{css}` | `200 {css, warnings, applied}` (Pro, see [Custom CSS](#custom-css)) |
 
 Slugs: 3–32 chars, `[a-z0-9][a-z0-9-_]*`, some reserved. The page limit depends on the plan. A Free account at its limit gets `403 upgrade_required` with `feature: "pages"`; a Pro account at its limit gets `422 limit`.
 
@@ -128,6 +139,7 @@ Slugs: 3–32 chars, `[a-z0-9][a-z0-9-_]*`, some reserved. The page limit depend
   "theme": Theme,
   "blocks": [Block],
   "domains": [Domain],
+  "custom_css": "sanitized CSS or empty",
   "created_at": "...", "updated_at": "..."
 }
 ```
@@ -144,11 +156,49 @@ Slugs: 3–32 chars, `[a-z0-9][a-z0-9-_]*`, some reserved. The page limit depend
   "button_shape": "square | rounded | pill",
   "layout": "stack | ledger",
   "background": {"kind": "solid | gradient | image", "color2": "#rrggbb", "image_upload_id": "uuid"},
-  "hide_branding": false
+  "hide_branding": false,
+  "font_uploads": {"body": "uuid", "display": "uuid"}
 }
 ```
 
 `hide_branding: true` removes the "Made with Kork" footer link. Turning it on needs Pro (`403 upgrade_required`, `feature: "remove_branding"`, `field: "hide_branding"`). Pages show the link whenever the owner's plan lacks the feature. The stored flag is kept, so other theme changes still save after Pro ends.
+
+`font_uploads` is optional; either key can be left out. `body` sets the font for the whole page and `display` sets it for the page title and heading blocks. Each ID must be a font the user uploaded with `POST /api/uploads/font`, otherwise `422` with `field: "font_uploads"`. Choosing a font that isn't already stored needs `custom_fonts` (`403 upgrade_required`, `field: "font_uploads"`). Keeping or removing stored fonts works on every plan. A PATCH that sends a theme without `font_uploads` removes them. While the owner has the feature, the page adds `@font-face` rules named `kork-body` and `kork-display` that load `/u/{id}` with `font-display: swap`, and puts them in front of the preset font stack. Without the feature, the preset `font` is used.
+
+### Custom CSS
+
+`PUT /api/pages/{id}/css` with `{"css": "..."}` sanitizes the CSS, stores the result on the page and returns:
+
+```json
+{"css": "body.kork-page main.page .btn{letter-spacing:.02em}", "warnings": ["line 3: @import is not allowed"], "applied": true}
+```
+
+- Input is limited to 20 KB (`422 too_large`, `field: "css"`). A sanitized result over 64 KB is also rejected.
+- Setting non-empty CSS needs `custom_css` (`403 upgrade_required`, `field: "css"`). Sending `""` removes it on every plan.
+- The stored value is the sanitized output, not the input. `warnings` lists each removed part with its line number; the editor shows them.
+- `applied` is false when the owner's plan doesn't include custom CSS. The CSS stays stored and the page doesn't use it until Pro returns.
+
+The sanitizer tokenizes the input with the CSS Syntax Level 3 algorithm (`internal/customcss`), builds rules from the tokens and writes the output from tokens. It doesn't use regexes on the source text. Comments are removed and escapes are decoded before any check, so `\75 rl(` counts as `url(` and `@im/**/port` doesn't form `@import`. It keeps:
+
+- style rules, plus `@media`, `@supports` and `@container` (up to 3 levels) containing style rules;
+- `@keyframes` (and `-webkit-keyframes`) with `from`, `to` and percentage frames;
+- `@font-face`, but only if every `src` URL is one of the owner's uploads. Only font descriptors are kept.
+
+It removes:
+
+- every other at-rule: `@import`, `@charset`, `@namespace`, `@layer`, `@page`, `@property` and the rest;
+- `url()` and `src()` unless the value is exactly `/u/<uuid>` for an upload owned by the page owner. Remote, protocol-relative and `data:` URLs are removed;
+- functions outside an allowlist of math, color, gradient, transform, filter, easing, shape and font functions. This removes `expression()`, `image-set()`, `cross-fade()`, `element()` and `paint()`;
+- `behavior`, `-moz-binding` and any property whose name contains `behavior` or `binding`;
+- strings containing `javascript:` or `vbscript:`, including when whitespace or control characters are inserted;
+- nested rules inside a style rule, and declarations containing `{}` blocks;
+- selectors containing at-keywords, URLs, broken tokens or delimiters that no selector uses, such as `<`, `/` and `!`.
+
+The output can't close the `<style>` element. Identifiers and strings are written with `<`, `>`, `&`, quotes, backslashes and control characters hex-escaped. A `<` delimiter, which media range syntax uses, is always followed by `=` or a space. As a last check, output containing `</`, `<!--` or `-->` is discarded.
+
+Scoping: each selector is prefixed with `body.kork-page main.page `. A leading `html`, `body`, `html body` or `:root` is replaced by `body.kork-page main.page`, so `body { background: #000 }` styles the page column, `:root { --accent: red }` overrides theme variables there, and `.btn` styles the buttons. The prefix adds specificity, so custom rules override the page stylesheet without `!important`. Rules can only reach elements inside `<main>`. The footer (Share, Report, Terms, Privacy) and the report dialog sit after `<main>` and are pinned visible above it, so custom CSS can't hide or cover the Report link. A prefix was chosen over CSS nesting because it works in every browser.
+
+Public pages put the CSS in the page's nonce'd `<style>` element, after the theme variables and font rules, so the CSP still allows only nonce'd inline styles. The stored CSS is sanitized again on every render, with URL ownership not rechecked, so CSS saved under an older sanitizer is still checked.
 
 Changing `preset` on PATCH without `colors` resets the colors to that preset.
 
@@ -171,6 +221,29 @@ Changing `preset` on PATCH without `colors` resets the colors to that preset.
 - `referrers`: top 20 by views. The name is the `Referer` host, lowercased, without `www.` or port. `direct` covers no referrer, non-web referrers and links from the same host. After 200 distinct referrers for a page in one day, the rest count as `other`. Referrers apply to page views only.
 - `countries`: top 20 ISO 3166 alpha-2 codes from Cloudflare's `CF-IPCountry` header; missing, `XX` and `T1` (Tor) count as `unknown`.
 - Only daily totals are stored: no IP addresses, cookies or user agents. Rows older than `ZELDA_STATS_RETENTION_DAYS` (default 400) are deleted hourly.
+
+### Stats CSV
+
+`GET /api/pages/{id}/stats.csv?days=N` downloads the same aggregates as one CSV table. It needs the `stats_export` feature (`403 upgrade_required`, `feature: "stats_export"`). `days` defaults to 30 and is capped like `/stats`. The file is `text/csv; charset=utf-8`, sent as an attachment named `<slug>-stats-<days>d-<YYYY-MM-DD>.csv`.
+
+The CSV uses one long-format table instead of several sections. Spreadsheets and data tools can load it directly and pivot it by `metric`:
+
+```csv
+date,metric,key,label,count
+2026-10-01,views,,,12
+2026-10-01,clicks,6f1c…,Instagram,4
+2026-10-01,referrer,instagram.com,,7
+2026-10-01,country,US,,9
+```
+
+| `metric` | `key` | `label` | Rows |
+|---|---|---|---|
+| `views` | empty | empty | one per day in the range, including zero days |
+| `clicks` | block ID | block label, or `Deleted block` | one per block per day with clicks |
+| `referrer` | referrer name as in `Stats` (`direct`, `other` included) | empty | one per referrer per day |
+| `country` | ISO code or `unknown` | empty | one per country per day |
+
+Rows are sorted by date, then in the metric order above, then by count, highest first. Referrers and countries aren't limited to the top 20. Text cells that start with `=`, `+`, `-`, `@`, tab or carriage return get a leading `'`, so spreadsheets don't run them as formulas.
 
 ## Account settings
 
@@ -198,7 +271,7 @@ Each email links to `GET /unsubscribe/weekly-stats?token=...`, which turns the e
 
 Limit 100 blocks per page. Validation errors return `422` with `field` set to the data key.
 
-When link screening is configured, web destinations are checked on create and update: `link`, `image` and `contact` `url`, `embed` `url`, the profile URL of a `service` block, and a `qr` `value` that is an http(s) URL. A listed destination returns `422 {"error":{"code":"blocked_destination","field":"url" or "value","message":"..."}}`. Publishing a page with a listed destination returns the same code with `field: "published"`. Only the destination URL is sent to the screening provider.
+When link screening is configured, web destinations are checked on create and update: `link`, `image` and `contact` `url`, `embed` `url`, the profile URL of a `service` block, a `qr` `value` that is an http(s) URL, each `events` `ticket_url` (reported with `field: "events"`) and a `latest` feed URL (`field: "source"`). A listed destination returns `422 {"error":{"code":"blocked_destination","field":"url" or "value","message":"..."}}`. Publishing a page with a listed destination returns the same code with `field: "published"`. Only the destination URL is sent to the screening provider.
 
 ### Schedules
 
@@ -224,34 +297,129 @@ When link screening is configured, web destinations are checked on create and up
 | `copy` | `{label, value}` | Copy-to-clipboard button |
 | `contact` | `{name, phone?, email?, org?, url?, note?}` | "Save contact" button downloading a vCard |
 | `map` | `{address, label?}` | Opens the address in a maps app |
+| `email_signup` | `{title, description?, button_label?, destination, brevo_list_id?, brevo_api_key?}` | Email form with double opt-in. See "Email sign-up" |
+| `events` | `{events: [{date, time?, title, city?, ticket_url?, sold_out?}]}` | 1–50 dates. See "Events" |
+| `latest` | `{source, label?}` | Newest item of a YouTube channel or RSS/Atom feed. See "Latest video or post" |
+
+### Email sign-up
+
+`data`: `title` (≤ 80), `description` (≤ 200), `button_label` (≤ 30, default "Subscribe"), `destination` `"kork"` (default) or `"brevo"`, and for Brevo `brevo_list_id` (a number or a string of digits).
+
+`brevo_api_key` is write-only. The server checks the key and list with Brevo (`GET /v3/contacts/lists/{id}`), seals the key with AES-256-GCM under `ZELDA_SECRET_KEY` and stores it outside the block data. Responses never contain it; they include `brevo_key_set: true` instead. On PATCH, omit the key to keep the saved one. Switching to `"kork"` deletes the key. Errors:
+
+- `422` `field: "destination"`, code `unavailable`: the server has no `ZELDA_SECRET_KEY`. `GET /api/catalog` reports `features.brevo_signup`.
+- `422` `field: "brevo_api_key"`: missing key (code `invalid`), rejected by Brevo (`brevo_key`), or Brevo unreachable (`brevo_unavailable`).
+- `422` `field: "brevo_list_id"`: missing, or no such list in that Brevo account (`brevo_list`).
+
+Key and list checks share the link-preview limit (60 per user per hour).
+
+Public submission, on the main host and on verified custom domains:
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | `/api/subscribe/{blockId}` | `{email, website}` | `202 {"message": "Check your inbox for a link to confirm your subscription."}` |
+
+- Needs `X-Requested-With: zelda`. 10 submissions per IP per hour (`429`).
+- `website` is a honeypot the page hides from people. When it is filled in, the response is `202` and nothing is stored or sent.
+- `422 field: "email"` for an invalid address; `404` when the block isn't visible on a live page.
+- The response is the same whether the address is new, waiting for confirmation or already on the list. Already-listed addresses get no email. Each address gets at most 3 confirmation emails per block per hour; past that the response is still `202`.
+- `429 list_full` when a block has 1,000 unconfirmed or 50,000 total addresses. `503 unavailable` if a Brevo block has lost its key.
+
+The confirmation email links to `/subscribe/confirm?token=...` on the main host. Opening it shows a button; the address is confirmed only by the POST, so mail scanners that fetch links don't confirm it. Links expire after 48 hours, and unconfirmed addresses are deleted then.
+
+After confirmation:
+
+- `kork`: the address joins the block's list.
+- `brevo`: the address is sent to Brevo (`POST /v3/contacts` with `listIds` and `updateEnabled: true`) and deleted from Kork. If Brevo fails, the address is kept and retried every 15 minutes for up to 7 days, then deleted.
+
+The creator's list:
+
+| Method | Path | Response |
+|---|---|---|
+| GET | `/api/pages/{id}/blocks/{blockId}/contacts` | `200 {contacts: [{id, block_id, email, confirmed_at}], pending, awaiting_push}`, newest first. `pending` counts unconfirmed addresses, `awaiting_push` confirmed addresses waiting for Brevo. |
+| GET | `/api/pages/{id}/blocks/{blockId}/contacts.csv` | `200 text/csv` with `email,confirmed_at`. Values starting with `= + - @` are prefixed with `'`. |
+| DELETE | `/api/pages/{id}/blocks/{blockId}/contacts/{contactId}` | `204` |
+
+Deleting the block deletes its addresses.
+
+### Events
+
+Each event: `date` `YYYY-MM-DD` (years 2000–2100), optional `time` `HH:MM` 24-hour, `title` (title or venue, ≤ 100), `city` (≤ 80), `ticket_url` (http or https only), `sold_out`. The server sorts events by date and time on save. Validation errors use `field: "events"` with a message naming the event, such as `Event 2: enter the date as YYYY-MM-DD`.
+
+Dates carry no time zone, so an event stays on the public page until its date has ended everywhere: 12:00 UTC the day after. A block whose events are all past isn't rendered. Ticket link clicks count as clicks on the block.
+
+### Latest video or post
+
+`source` is one of:
+
+- a YouTube handle (`@name`, `youtube.com/@name`), stored as `https://www.youtube.com/@name`;
+- a channel address (`youtube.com/channel/UC…`, or the channel's `feeds/videos.xml?channel_id=` URL), stored as `https://www.youtube.com/channel/UC…`;
+- a legacy `youtube.com/user/name` address;
+- any other http(s) URL, treated as an RSS or Atom feed.
+
+Other YouTube addresses (`/c/…`, video links) are rejected. `label` (≤ 60) replaces the small "Latest video"/"Latest post" heading.
+
+On create, and on update when `source` changes, the server fetches the feed through `internal/fetch` (same address rules and limits as link previews) and returns `422 field: "source"` (code `feed_failed`) if it can't be read or has no items. These checks share the link-preview limit.
+
+Handles are resolved by fetching the channel page and reading its channel ID; the mapping is cached for 30 days. Feeds are read from `https://www.youtube.com/feeds/videos.xml?channel_id=…`.
+
+The newest item (by date, else the first) is cached per block in Postgres with its title, link, date and thumbnail. The thumbnail is downloaded once per image URL and stored as an upload owned by the page owner, with the same type checks as `/api/uploads`, so pages keep `img-src 'self'`. When a cached item exists, rendering never waits for the network: after an hour (10 minutes after a failed fetch) the page serves the cached item and refreshes in the background. A block with nothing cached waits up to 1 second for its first fetch and is left out if that doesn't finish. A failed refresh keeps the last good item. Replacing an item's thumbnail or deleting the block deletes the old thumbnail upload.
 
 ## Domains
 
 | Method | Path | Body | Response |
 |---|---|---|---|
 | POST | `/api/pages/{id}/domains` | `{hostname}` | `201 Domain` |
-| POST | `/api/pages/{id}/domains/{domainId}/verify` | – | `200 Domain` or `422` with the reason |
+| POST | `/api/pages/{id}/domains/{domainId}/verify` | – | `200 Domain`; in DNS mode `422 dns_not_ready` with the reason |
 | DELETE | `/api/pages/{id}/domains/{domainId}` | – | `204` |
 
-Adding a domain needs Pro. Free accounts get `403 upgrade_required` with `feature: "custom_domains"` and `field: "hostname"`. Pro includes 1 domain per account; adding another returns `422 limit`. Verifying also needs Pro, except for domains attached before plans existed. Removing a domain always works.
+Adding a domain needs Pro. Free accounts get `403 upgrade_required` with `feature: "custom_domains"` and `field: "hostname"`. Pro includes 1 domain per account; adding another returns `422 limit`. Verifying also needs Pro, except for domains attached before plans existed. Removing a domain always works, unless Cloudflare can't be reached (see below).
 
 `Domain`:
 
 ```json
 {
   "id": "uuid", "hostname": "links.alice.com", "verified": false,
-  "txt_name": "_zelda.links.alice.com", "txt_value": "zelda-verify=abc123",
-  "target": "edge.example.com", "created_at": "...", "active": true
+  "txt_name": "_cf-custom-hostname.links.alice.com", "txt_value": "0e2d5a7f-...",
+  "target": "customers.subcult.tv", "created_at": "...", "active": true,
+  "mode": "cloudflare", "status": "pending",
+  "records": [
+    {"type": "CNAME", "name": "links.alice.com", "value": "customers.subcult.tv", "purpose": "routing"},
+    {"type": "TXT", "name": "_cf-custom-hostname.links.alice.com", "value": "0e2d5a7f-...", "purpose": "ownership"}
+  ],
+  "errors": ["custom hostname does not CNAME to this zone."],
+  "checked_at": "2026-10-02T12:00:00Z"
 }
 ```
 
-`active` is false when the owner's plan no longer covers the domain. The domain stays attached, but the page isn't served on it and `/internal/tls-ask` refuses it (see [Plans](#plans)).
+- `active` is false when the owner's plan no longer covers the domain. The domain stays attached, but the page isn't served on it and `/internal/tls-ask` refuses it (see [Plans](#plans)).
+- `status` is `pending`, `active` (verified) or `error` (Cloudflare reports a state that won't fix itself; `errors` says what to do).
+- `records` lists the DNS records to add. `purpose` is `routing` (CNAME to `target`), `ownership` (TXT) or `certificate` (certificate validation records Cloudflare asks for, Cloudflare mode only, hidden once verified).
+- `errors` holds readable problems: Cloudflare's `verification_errors` and `ssl.validation_errors`, plus our explanation of terminal states. Empty in DNS mode.
+- `checked_at` is when Cloudflare was last asked; null in DNS mode.
 
-Setup instructions shown to the user: add the TXT record, point the hostname at `target` with a CNAME (or A/AAAA for apex domains), then press Verify. TLS is issued automatically on first request after verification.
+### DNS mode
+
+Used when `ZELDA_CLOUDFLARE_TOKEN` or `ZELDA_CLOUDFLARE_ZONE_ID` is unset. `txt_name` is `_zelda.<hostname>` and `txt_value` is `zelda-verify=<token>`. The user adds that TXT record, points the hostname at `target` with a CNAME (or A/AAAA for apex domains), then presses Verify. Verify checks both records and returns `422 dns_not_ready` with the reason until they match. Caddy issues the certificate on the first request after asking `/internal/tls-ask`.
+
+### Cloudflare mode
+
+Used when both `ZELDA_CLOUDFLARE_TOKEN` and `ZELDA_CLOUDFLARE_ZONE_ID` are set ([setup](custom-domains-cloudflare.md)).
+
+- Adding a domain creates a Cloudflare custom hostname (`ssl.method: http`, `ssl.type: dv`) and stores its ID. If Cloudflare refuses the hostname the response is `422 cloudflare_rejected` with Cloudflare's message; if Cloudflare can't be reached or rejects our token it is `502 cloudflare_unavailable`. Either way no domain is kept. A hostname left in Cloudflare by an earlier failed attempt is reused.
+- `txt_name`/`txt_value` are Cloudflare's `ownership_verification` record, or empty when Cloudflare didn't send one.
+- Verify reads the hostname from Cloudflare and returns `200 Domain`. `verified` becomes true only when the hostname status and the certificate status are both `active`; until then `status` and `errors` explain what's missing. Domains added before Cloudflare mode was enabled are registered with Cloudflare on their next Verify.
+- Every 10 minutes the server rechecks up to 50 pending domains that weren't checked in the last 5 minutes, so users don't have to keep pressing Verify. If Cloudflare has dropped a pending hostname, `status` becomes `error` and the domain is no longer rechecked; the user removes and re-adds it.
+- Deleting a domain deletes the custom hostname first. A hostname Cloudflare no longer has counts as deleted; any other failure returns `502 cloudflare_unavailable` and keeps the domain. Deleting a page or account removes its custom hostnames too; failures there are logged, and the hostname must then be removed in the Cloudflare dashboard.
+- `/internal/tls-ask` keeps answering as in DNS mode. Cloudflare issues the certificates, so nothing calls it.
 
 ## Uploads
 
 `POST /api/uploads` multipart field `file`; PNG, JPEG, WebP or GIF, max 5 MB. Response `201 {id, url, content_type, size}`.
+
+`POST /api/uploads/font` multipart field `file`; WOFF2, WOFF, TTF or OTF, max 1 MB. Needs the `custom_fonts` feature (`403 upgrade_required`, `field: "file"`). The type comes from the file's first bytes (`wOF2`, `wOFF`, `00 01 00 00`, `OTTO`), never from the file name or declared type. WOFF and WOFF2 headers must state the file's actual length, and TTF/OTF need 1–100 tables. `content_type` is `font/woff2`, `font/woff`, `font/ttf` or `font/otf`. Other files get `422 unsupported`; files over 1 MB get `413 too_large`. Font uploads count against the same 60-per-hour upload limit.
+
+`/u/{id}` serves fonts with their font type and `Cross-Origin-Resource-Policy: same-origin`, without CORS headers. Pages load them from their own host: the main host or the custom domain.
 
 ## Import and link previews
 
@@ -333,8 +501,9 @@ Every account is `free` or `pro`. Pro comes from an admin grant (`manual`), a St
 | Stats history | 30 days | 365 days |
 | Custom domains | 0 | 1 |
 | `remove_branding`: hide the footer credit | no | yes |
-| `custom_css` | no | yes (not built yet, #14) |
-| `custom_fonts`: font uploads | no | yes (not built yet, #14) |
+| `custom_css`: custom CSS per page | no | yes |
+| `custom_fonts`: font uploads | no | yes |
+| `stats_export`: stats CSV download | no | yes |
 | `scheduled_links` | yes | yes |
 
 `Plan` (in `GET /api/auth/me`):
@@ -347,7 +516,7 @@ Every account is `free` or `pro`. Pro comes from an admin grant (`manual`), a St
   "expires_at": "2026-11-01T00:00:00Z",
   "domains_grace_until": "2026-11-08T00:00:00Z",
   "pages": 5, "stats_days": 30, "custom_domains": 0,
-  "features": {"custom_domains": false, "remove_branding": false, "custom_css": false, "custom_fonts": false, "scheduled_links": true},
+  "features": {"custom_domains": false, "remove_branding": false, "custom_css": false, "custom_fonts": false, "stats_export": false, "scheduled_links": true},
   "pro": {"plan": "pro", "pages": 25, "stats_days": 365, "custom_domains": 1, "features": {"custom_domains": true, "...": true}}
 }
 ```
@@ -425,6 +594,8 @@ Data is kept; Pro-only settings stop applying.
 
 - Pages over the Free limit stay and keep working. New pages can't be created until the account is under the limit.
 - The footer credit comes back. The stored `hide_branding` flag is kept for when Pro returns.
-- Stats requests are capped at 30 days again. Older rows stay until `ZELDA_STATS_RETENTION_DAYS` removes them.
+- Stats requests are capped at 30 days again. Older rows stay until `ZELDA_STATS_RETENTION_DAYS` removes them. CSV download returns `403 upgrade_required`.
+- Custom CSS stays stored but isn't added to the page. It can be removed (`PUT .../css` with `""`) but not changed.
+- Uploaded fonts stay in the theme but the page uses the preset `font`. Theme changes that keep or remove them still save.
 - Custom domains keep serving for 7 days after `expires_at` (`domains_grace_until`). After that they stay attached but aren't served and get no certificate until Pro is granted again. Revoking Pro by hand (setting `free`) has no grace period.
 - Domains attached before plans existed (migration `0008`) keep working on any plan.

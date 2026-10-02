@@ -4,58 +4,63 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"testing"
 )
 
+func testKey() []byte { return bytes.Repeat([]byte{7}, KeySize) }
+
 func TestParseKey(t *testing.T) {
-	key := bytes.Repeat([]byte{0xfb}, KeySize)
-	for _, s := range []string{
+	key := testKey()
+	for _, in := range []string{
 		base64.StdEncoding.EncodeToString(key),
-		base64.RawStdEncoding.EncodeToString(key),
-		base64.URLEncoding.EncodeToString(key),
 		base64.RawURLEncoding.EncodeToString(key),
 		hex.EncodeToString(key),
+		"  " + base64.StdEncoding.EncodeToString(key) + "\n",
 	} {
-		got, err := ParseKey(s)
+		got, err := ParseKey(in)
 		if err != nil || !bytes.Equal(got, key) {
-			t.Errorf("ParseKey(%q) = %x, %v", s, got, err)
+			t.Errorf("ParseKey(%q) = %x, %v", in, got, err)
 		}
 	}
-	for _, s := range []string{"", "short", base64.StdEncoding.EncodeToString(key[:16]), hex.EncodeToString(key[:31])} {
-		if _, err := ParseKey(s); err == nil {
-			t.Errorf("ParseKey(%q) accepted", s)
+	for _, in := range []string{"", "short", base64.StdEncoding.EncodeToString(key[:16]), hex.EncodeToString(key)[:62]} {
+		if _, err := ParseKey(in); !errors.Is(err, ErrKey) {
+			t.Errorf("ParseKey(%q): want ErrKey, got %v", in, err)
 		}
 	}
 }
 
 func TestSealOpen(t *testing.T) {
-	s, err := New(bytes.Repeat([]byte{1}, KeySize))
+	s, err := New(testKey())
 	if err != nil {
 		t.Fatal(err)
 	}
-	box := s.Seal([]byte("refresh-token"), []byte("user-1"))
-	if bytes.Contains(box, []byte("refresh-token")) {
-		t.Fatal("plaintext visible in box")
+	box := s.Seal([]byte("xkeysib-secret"), []byte("block-1"))
+	if bytes.Contains(box, []byte("xkeysib")) {
+		t.Fatal("plaintext visible in sealed value")
 	}
-	got, err := s.Open(box, []byte("user-1"))
-	if err != nil || string(got) != "refresh-token" {
-		t.Fatalf("open: %q %v", got, err)
+	if again := s.Seal([]byte("xkeysib-secret"), []byte("block-1")); bytes.Equal(again, box) {
+		t.Fatal("nonce reused")
 	}
-	if _, err := s.Open(box, []byte("user-2")); err == nil {
-		t.Fatal("opened with another aad")
+	pt, err := s.Open(box, []byte("block-1"))
+	if err != nil || string(pt) != "xkeysib-secret" {
+		t.Fatalf("Open = %q, %v", pt, err)
+	}
+	if _, err := s.Open(box, []byte("block-2")); !errors.Is(err, ErrOpen) {
+		t.Errorf("other aad: %v", err)
+	}
+	other, _ := New(bytes.Repeat([]byte{8}, KeySize))
+	if _, err := other.Open(box, []byte("block-1")); !errors.Is(err, ErrOpen) {
+		t.Errorf("other key: %v", err)
 	}
 	box[len(box)-1] ^= 1
-	if _, err := s.Open(box, []byte("user-1")); err == nil {
-		t.Fatal("opened a modified box")
+	if _, err := s.Open(box, []byte("block-1")); !errors.Is(err, ErrOpen) {
+		t.Errorf("tampered: %v", err)
 	}
-	if _, err := s.Open([]byte{1, 2}, nil); err == nil {
-		t.Fatal("opened a short box")
+	if _, err := s.Open([]byte{1, 2, 3}, nil); !errors.Is(err, ErrOpen) {
+		t.Errorf("short: %v", err)
 	}
-	other, _ := New(bytes.Repeat([]byte{2}, KeySize))
-	if _, err := other.Open(s.Seal([]byte("x"), nil), nil); err == nil {
-		t.Fatal("opened under another key")
-	}
-	if _, err := New([]byte("short")); err == nil {
-		t.Fatal("short key accepted")
+	if _, err := New([]byte("short")); !errors.Is(err, ErrKey) {
+		t.Errorf("New short key: %v", err)
 	}
 }

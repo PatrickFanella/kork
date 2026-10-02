@@ -1,12 +1,14 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"git.subcult.tv/subculture-collective/zelda/internal/blocks"
@@ -70,7 +72,9 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 		"button_shapes":   catalog.ButtonShapes,
 		"layouts":         catalog.Layouts,
 		"embed_providers": catalog.EmbedProviders,
-		"features":        map[string]bool{"custom_domains": s.cfg.CustomDomains},
+		"features":        map[string]bool{"custom_domains": s.cfg.CustomDomains, "brevo_signup": s.x.sealer != nil},
+		"domain_mode":     s.domains.Mode(),
+		"domain_target":   s.cfg.DomainTarget,
 	})
 }
 
@@ -120,16 +124,27 @@ func (s *Server) handleListPages(w http.ResponseWriter, r *http.Request) {
 
 type domainView struct {
 	*store.Domain
+	// TXTName and TXTValue are the ownership TXT record: _zelda.<host> in
+	// DNS mode, Cloudflare's ownership_verification record (or empty) in
+	// Cloudflare mode.
 	TXTName  string `json:"txt_name"`
 	TXTValue string `json:"txt_value"`
 	Target   string `json:"target"`
 	// Active is false when the owner's plan no longer covers the domain;
 	// it stays attached but the page isn't served on it.
 	Active bool `json:"active"`
+	// Mode is "dns" or "cloudflare"; Status is "pending", "active" or "error".
+	Mode      string      `json:"mode"`
+	Status    string      `json:"status"`
+	Records   []dnsRecord `json:"records"`
+	Errors    []string    `json:"errors"`
+	CheckedAt *time.Time  `json:"checked_at"`
 }
 
 func (s *Server) domainView(d *store.Domain) domainView {
-	return domainView{d, "_zelda." + d.Hostname, "zelda-verify=" + d.VerifyToken, s.cfg.DomainTarget, true}
+	v := domainView{Domain: d, Target: s.cfg.DomainTarget, Active: true, Mode: s.domains.Mode(), Errors: []string{}}
+	s.domains.Describe(d, &v)
+	return v
 }
 
 type pageView struct {
@@ -139,6 +154,8 @@ type pageView struct {
 	AvatarURL *string        `json:"avatar_url"`
 	Blocks    []*store.Block `json:"blocks"`
 	Domains   []domainView   `json:"domains"`
+	// CustomCSS is the stored, sanitized custom CSS (Pro).
+	CustomCSS string `json:"custom_css"`
 }
 
 func (s *Server) writePage(w http.ResponseWriter, r *http.Request, status int, p *store.Page) {
@@ -156,6 +173,10 @@ func (s *Server) writePage(w http.ResponseWriter, r *http.Request, status int, p
 		return
 	}
 	v := pageView{Page: p, Theme: themeOf(p), URL: s.pageURL(p.Slug), Blocks: bl, Domains: make([]domainView, 0, len(ds))}
+	if v.CustomCSS, err = s.store.PageCSS(r.Context(), p.ID); err != nil {
+		s.serverErr(w, r, err)
+		return
+	}
 	if p.AvatarUploadID != nil {
 		u := uploadURL(*p.AvatarUploadID)
 		v.AvatarURL = &u
@@ -329,6 +350,9 @@ func (s *Server) handleUpdatePage(w http.ResponseWriter, r *http.Request) {
 		if t.HideBranding && !themeOf(p).HideBranding && !s.requireFeature(w, r, plans.RemoveBranding, "hide_branding") {
 			return
 		}
+		if !s.checkThemeFonts(w, r, t, themeOf(p)) {
+			return
+		}
 		p.Theme, _ = json.Marshal(t)
 	}
 	if body.Published != nil {
@@ -361,6 +385,7 @@ func (s *Server) handleDeletePage(w http.ResponseWriter, r *http.Request) {
 	if p == nil {
 		return
 	}
+	s.domains.Release(r.Context(), p.ID, "")
 	if err := s.store.DeletePage(r.Context(), p.ID); err != nil {
 		s.serverErr(w, r, err)
 		return
@@ -417,7 +442,12 @@ func (s *Server) handleCreateBlock(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnprocessableEntity, "invalid", "unknown block type", "type")
 		return
 	}
-	data, err := blocks.Validate(body.Type, body.Data, s.uploadChecker(r))
+	raw, secrets, err := blocks.TakeSecrets(body.Type, body.Data)
+	if err != nil {
+		s.writeBlockErr(w, err)
+		return
+	}
+	data, err := blocks.Validate(body.Type, raw, s.uploadChecker(r))
 	if err != nil {
 		s.writeBlockErr(w, err)
 		return
@@ -432,6 +462,10 @@ func (s *Server) handleCreateBlock(w http.ResponseWriter, r *http.Request) {
 	if !body.applyTo(w, &sched) {
 		return
 	}
+	data, after, ok := s.prepareExtras(w, r, nil, body.Type, data, secrets)
+	if !ok {
+		return
+	}
 	enabled := body.Enabled == nil || *body.Enabled
 	b, err := s.store.CreateBlock(r.Context(), p.ID, body.Type, data, enabled, sched)
 	if errors.Is(err, store.ErrLimit) {
@@ -441,6 +475,13 @@ func (s *Server) handleCreateBlock(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.serverErr(w, r, err)
 		return
+	}
+	if after != nil {
+		if err := after(r.Context(), b); err != nil {
+			_ = s.store.DeleteBlock(r.Context(), p.ID, b.ID)
+			s.serverErr(w, r, err)
+			return
+		}
 	}
 	b.Label = blocks.Label(b.Type, b.Data)
 	writeJSON(w, http.StatusCreated, b)
@@ -478,13 +519,23 @@ func (s *Server) handleUpdateBlock(w http.ResponseWriter, r *http.Request) {
 	if !body.applyTo(w, &b.Schedule) {
 		return
 	}
+	var after func(context.Context, *store.Block) error
 	if len(body.Data) > 0 {
-		data, err := blocks.Validate(b.Type, body.Data, s.uploadChecker(r))
+		raw, secrets, err := blocks.TakeSecrets(b.Type, body.Data)
+		if err != nil {
+			s.writeBlockErr(w, err)
+			return
+		}
+		data, err := blocks.Validate(b.Type, raw, s.uploadChecker(r))
 		if err != nil {
 			s.writeBlockErr(w, err)
 			return
 		}
 		if s.rejectBlocked(w, r, b.Type, data) {
+			return
+		}
+		var ok bool
+		if data, after, ok = s.prepareExtras(w, r, b, b.Type, data, secrets); !ok {
 			return
 		}
 		b.Data = data
@@ -495,6 +546,12 @@ func (s *Server) handleUpdateBlock(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.UpdateBlock(r.Context(), b); err != nil {
 		s.serverErr(w, r, err)
 		return
+	}
+	if after != nil {
+		if err := after(r.Context(), b); err != nil {
+			s.serverErr(w, r, err)
+			return
+		}
 	}
 	b.Label = blocks.Label(b.Type, b.Data)
 	writeJSON(w, http.StatusOK, b)
@@ -510,6 +567,7 @@ func (s *Server) handleDeleteBlock(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "not_found", "block not found", "")
 		return
 	}
+	cleanup := s.blockDeleteCleanup(r.Context(), id)
 	if err := s.store.DeleteBlock(r.Context(), p.ID, id); errors.Is(err, store.ErrNotFound) {
 		writeErr(w, http.StatusNotFound, "not_found", "block not found", "")
 		return
@@ -517,6 +575,7 @@ func (s *Server) handleDeleteBlock(w http.ResponseWriter, r *http.Request) {
 		s.serverErr(w, r, err)
 		return
 	}
+	cleanup()
 	w.WriteHeader(http.StatusNoContent)
 }
 

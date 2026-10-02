@@ -65,12 +65,18 @@ export interface CatalogTheme {
 
 export interface CatalogFeatures {
   custom_domains: boolean;
+  /** Email sign-up blocks can send addresses to Brevo (needs ZELDA_SECRET_KEY). */
+  brevo_signup?: boolean;
 }
 
 export interface Catalog {
   services: CatalogService[];
   /** Missing on older servers; treat absent flags as enabled. */
   features?: CatalogFeatures;
+  /** How custom domains are verified. Missing on older servers; treat as "dns". */
+  domain_mode?: DomainMode;
+  /** Hostname custom domains point a CNAME at. */
+  domain_target?: string;
   categories: KeyName[];
   block_types: BlockTypeInfo[];
   themes: CatalogTheme[];
@@ -99,6 +105,24 @@ export interface Theme {
   background: ThemeBackground;
   /** Hide the "Made with Kork" footer link; honored only on Pro. */
   hide_branding?: boolean;
+  /** Uploaded fonts (Pro); `font` is the fallback. */
+  font_uploads?: FontUploads;
+}
+
+/** Upload IDs of fonts from POST /api/uploads/font. */
+export interface FontUploads {
+  body?: string;
+  display?: string;
+}
+
+/** Result of saving custom CSS. */
+export interface CustomCSSResult {
+  /** The sanitized, scoped CSS that was stored. */
+  css: string;
+  /** What the sanitizer removed, each starting with "line N:". */
+  warnings: string[];
+  /** False when the plan doesn't include custom CSS, so the page doesn't show it. */
+  applied: boolean;
 }
 
 export interface ThemePatch {
@@ -110,6 +134,7 @@ export interface ThemePatch {
   layout?: string;
   background?: Partial<ThemeBackground>;
   hide_branding?: boolean;
+  font_uploads?: FontUploads;
 }
 
 export type BlockType =
@@ -123,10 +148,31 @@ export type BlockType =
   | "qr"
   | "copy"
   | "contact"
-  | "map";
+  | "map"
+  | "email_signup"
+  | "events"
+  | "latest";
 
-/** Block data is a flat object of string/boolean values keyed per block type. */
-export type BlockData = Record<string, string | boolean | undefined>;
+/** One date in an events block. */
+export interface EventItem {
+  /** YYYY-MM-DD */
+  date: string;
+  /** HH:MM, 24-hour */
+  time?: string;
+  title: string;
+  city?: string;
+  ticket_url?: string;
+  sold_out?: boolean;
+}
+
+export type BlockValue = string | number | boolean | EventItem[] | undefined;
+
+/**
+ * Block data keyed per block type: mostly flat strings and booleans. Events
+ * blocks hold `events: EventItem[]`. Email sign-up blocks accept a
+ * write-only `brevo_api_key`; responses only say `brevo_key_set: true`.
+ */
+export type BlockData = Record<string, BlockValue>;
 
 export interface Block {
   id: string;
@@ -140,6 +186,15 @@ export interface Block {
   ends_at?: string | null;
 }
 
+export type DomainMode = "dns" | "cloudflare";
+
+export interface DomainRecord {
+  type: string;
+  name: string;
+  value: string;
+  purpose: "routing" | "ownership" | "certificate";
+}
+
 export interface Domain {
   id: string;
   hostname: string;
@@ -150,6 +205,14 @@ export interface Domain {
   created_at: string;
   /** False when the owner's plan no longer covers the domain. Missing on older servers. */
   active?: boolean;
+  /** The fields below are missing on older servers. */
+  mode?: DomainMode;
+  status?: "pending" | "active" | "error";
+  /** DNS records the user adds at their DNS provider. */
+  records?: DomainRecord[];
+  /** Readable problems reported by the check (Cloudflare mode). */
+  errors?: string[];
+  checked_at?: string | null;
 }
 
 export interface PageSummary {
@@ -174,6 +237,8 @@ export interface Page {
   theme: Theme;
   blocks: Block[];
   domains: Domain[];
+  /** Stored, sanitized custom CSS (Pro). Missing on older servers. */
+  custom_css?: string;
   created_at: string;
   updated_at: string;
 }
@@ -210,6 +275,22 @@ export interface Stats {
   referrers?: NameCount[];
   /** Top 20 ISO country codes, or "unknown". */
   countries?: NameCount[];
+}
+
+/** A confirmed address on an email sign-up block's list. */
+export interface SignupContact {
+  id: string;
+  block_id: string;
+  email: string;
+  confirmed_at: string;
+}
+
+export interface SignupContacts {
+  contacts: SignupContact[];
+  /** Addresses that haven't opened their confirmation link yet. */
+  pending: number;
+  /** Confirmed addresses Brevo hasn't accepted yet; retried automatically. */
+  awaiting_push: number;
 }
 
 export interface AccountSettings {
@@ -287,7 +368,13 @@ export interface PendingUser {
 
 export type PlanTier = "free" | "pro";
 
-export type PlanFeature = "custom_domains" | "remove_branding" | "custom_css" | "custom_fonts" | "scheduled_links";
+export type PlanFeature =
+  | "custom_domains"
+  | "remove_branding"
+  | "custom_css"
+  | "custom_fonts"
+  | "stats_export"
+  | "scheduled_links";
 
 export interface PlanLimits {
   /** The plan in force now; an expired Pro grant reports "free". */
@@ -503,6 +590,9 @@ export const api = {
   stats: (id: string, days = 30) =>
     request<Stats>("GET", `/api/pages/${enc(id)}/stats?days=${days}`),
   qrUrl: (id: string) => `/api/pages/${enc(id)}/qr.svg`,
+  /** Same-origin CSV download (a plain GET link); Pro. */
+  statsCsvUrl: (id: string, days: number) => `/api/pages/${enc(id)}/stats.csv?days=${days}`,
+  setPageCSS: (id: string, css: string) => request<CustomCSSResult>("PUT", `/api/pages/${enc(id)}/css`, { css }),
 
   // Account
   accountSettings: () => request<AccountSettings>("GET", "/api/account/settings"),
@@ -523,6 +613,15 @@ export const api = {
   reorderBlocks: (pageId: string, ids: string[]) =>
     request<void>("PUT", `/api/pages/${enc(pageId)}/blocks/order`, { ids }),
 
+  // Email sign-up lists
+  signupContacts: (pageId: string, blockId: string) =>
+    request<SignupContacts>("GET", `/api/pages/${enc(pageId)}/blocks/${enc(blockId)}/contacts`),
+  deleteSignupContact: (pageId: string, blockId: string, contactId: string) =>
+    request<void>("DELETE", `/api/pages/${enc(pageId)}/blocks/${enc(blockId)}/contacts/${enc(contactId)}`),
+  /** Same-origin CSV download of the confirmed list. */
+  signupContactsCsvUrl: (pageId: string, blockId: string) =>
+    `/api/pages/${enc(pageId)}/blocks/${enc(blockId)}/contacts.csv`,
+
   // Domains
   addDomain: (pageId: string, hostname: string) =>
     request<Domain>("POST", `/api/pages/${enc(pageId)}/domains`, { hostname }),
@@ -536,6 +635,11 @@ export const api = {
     const form = new FormData();
     form.append("file", file);
     return request<Upload>("POST", "/api/uploads", form);
+  },
+  uploadFont: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<Upload>("POST", "/api/uploads/font", form);
   },
 
   // Import and link previews (the server fetches the remote page)

@@ -465,13 +465,17 @@ type Domain struct {
 	VerifyToken string    `json:"-"`
 	Verified    bool      `json:"verified"`
 	CreatedAt   time.Time `json:"created_at"`
+	// Cloudflare for SaaS state; see cloudflare_domains.go.
+	CF CloudflareState `json:"-"`
 }
 
-const domainCols = `id, page_id, hostname, verify_token, verified_at IS NOT NULL, created_at`
+const domainCols = `id, page_id, hostname, verify_token, verified_at IS NOT NULL, created_at,
+	cf_hostname_id, cf_status, cf_ssl_status, cf_details, cf_checked_at`
 
 func scanDomain(row pgx.Row) (*Domain, error) {
 	var d Domain
-	if err := row.Scan(&d.ID, &d.PageID, &d.Hostname, &d.VerifyToken, &d.Verified, &d.CreatedAt); err != nil {
+	if err := row.Scan(&d.ID, &d.PageID, &d.Hostname, &d.VerifyToken, &d.Verified, &d.CreatedAt,
+		&d.CF.HostnameID, &d.CF.Status, &d.CF.SSLStatus, &d.CF.Details, &d.CF.CheckedAt); err != nil {
 		return nil, notFound(err)
 	}
 	return &d, nil

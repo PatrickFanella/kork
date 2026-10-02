@@ -370,6 +370,8 @@ input[type="password"],
 input[type="url"],
 input[type="tel"],
 input[type="datetime-local"],
+input[type="date"],
+input[type="time"],
 input[type="search"],
 input:not([type]),
 textarea,
@@ -1872,6 +1874,15 @@ a.editor-url:hover {
 .dns-steps .btn {
   align-self: flex-start;
 }
+.dns-record {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.domain-errors {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
 
 /* ---------- Stats ---------- */
 
@@ -2240,6 +2251,101 @@ a.editor-url:hover {
   background: var(--warning-soft);
 }
 
+/* Events block editor */
+.events-field {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  align-items: flex-start;
+}
+.events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.event-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.event-row-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.event-row-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font-size: 0.82rem;
+  font-weight: 560;
+}
+.event-row-grid .span-2 {
+  grid-column: 1 / -1;
+}
+.event-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+@media (max-width: 520px) {
+  .event-row-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Email sign-up list in the block editor */
+.signup-contacts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.signup-contacts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.signup-contacts-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.signup-contact-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.signup-contact-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.signup-contact-email {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 /* ---------- Plans ---------- */
 
 .badge-pro {
@@ -2266,4 +2372,31 @@ a.editor-url:hover {
   color: var(--text);
   font: inherit;
   font-size: 0.85rem;
+}
+
+/* ---------- Pro styling: fonts and custom CSS ---------- */
+
+.font-slot-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.font-slot-row > .muted {
+  min-width: 7.5rem;
+}
+.code-textarea {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  tab-size: 2;
+  white-space: pre;
+  overflow-x: auto;
+}
+.css-warnings {
+  margin: 4px 0 0;
+  padding-left: 1.2em;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
 }
