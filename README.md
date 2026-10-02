@@ -64,6 +64,8 @@ Ports 80 and 443 must reach Caddy for ACME. If the service sits behind an existi
 
 `docker-compose.proxy.yml` runs only Postgres and the app, published on `ZELDA_PUBLISH`. Point the proxy's hostname at that port, set `ZELDA_TRUST_PROXY=true`, and set `ZELDA_CUSTOM_DOMAINS=false` unless the proxy can issue certificates for arbitrary hostnames. The editor then hides the Domains tab.
 
+Behind a Cloudflare tunnel, custom domains can use Cloudflare for SaaS instead: set `ZELDA_CLOUDFLARE_TOKEN` and `ZELDA_CLOUDFLARE_ZONE_ID`, and point `ZELDA_DOMAIN_TARGET` at the zone's customer CNAME target. Adding a domain then creates a Cloudflare custom hostname, and Cloudflare issues the certificate. See `docs/custom-domains-cloudflare.md`.
+
 Plans: accounts are Free or Pro, and admins grant Pro by hand under Admin → Users. Limits and Pro features are in `internal/plans/plans.go`; see "Plans" in `docs/api.md`. `ZELDA_FREE_PAGE_LIMIT` (default 5) sets how many pages a Free account can create. Pro stats go back 365 days, so keep `ZELDA_STATS_RETENTION_DAYS` at 365 or more.
 
 Admins are the addresses in `ZELDA_ADMIN_EMAILS`, once verified. Without SMTP, verify an account by hand: `UPDATE users SET email_verified_at = now() WHERE lower(email) = '...'`.

@@ -92,9 +92,14 @@ Deleting an account removes the user, sessions, tokens, pending email changes, u
   "button_styles": [{"key": "filled", "name": "Filled"}],
   "button_shapes": [{"key": "rounded", "name": "Rounded"}],
   "layouts": [{"key": "stack", "name": "Stacked buttons"}],
-  "embed_providers": ["YouTube", "Vimeo", "Spotify", "SoundCloud", "Twitch", "Apple Music"]
+  "embed_providers": ["YouTube", "Vimeo", "Spotify", "SoundCloud", "Twitch", "Apple Music"],
+  "features": {"custom_domains": true},
+  "domain_mode": "cloudflare",
+  "domain_target": "customers.subcult.tv"
 }
 ```
+
+`domain_mode` is `cloudflare` when the server registers custom domains with Cloudflare for SaaS, otherwise `dns` (see [Domains](#domains)). `domain_target` is the hostname customers point a CNAME at.
 
 `input` is one of `handle | url | text | email | phone`. `copy_only: true` services (Zelle, crypto addresses, Discord usernames) render as a copy button instead of a link.
 
@@ -230,24 +235,48 @@ When link screening is configured, web destinations are checked on create and up
 | Method | Path | Body | Response |
 |---|---|---|---|
 | POST | `/api/pages/{id}/domains` | `{hostname}` | `201 Domain` |
-| POST | `/api/pages/{id}/domains/{domainId}/verify` | – | `200 Domain` or `422` with the reason |
+| POST | `/api/pages/{id}/domains/{domainId}/verify` | – | `200 Domain`; in DNS mode `422 dns_not_ready` with the reason |
 | DELETE | `/api/pages/{id}/domains/{domainId}` | – | `204` |
 
-Adding a domain needs Pro. Free accounts get `403 upgrade_required` with `feature: "custom_domains"` and `field: "hostname"`. Pro includes 1 domain per account; adding another returns `422 limit`. Verifying also needs Pro, except for domains attached before plans existed. Removing a domain always works.
+Adding a domain needs Pro. Free accounts get `403 upgrade_required` with `feature: "custom_domains"` and `field: "hostname"`. Pro includes 1 domain per account; adding another returns `422 limit`. Verifying also needs Pro, except for domains attached before plans existed. Removing a domain always works, unless Cloudflare can't be reached (see below).
 
 `Domain`:
 
 ```json
 {
   "id": "uuid", "hostname": "links.alice.com", "verified": false,
-  "txt_name": "_zelda.links.alice.com", "txt_value": "zelda-verify=abc123",
-  "target": "edge.example.com", "created_at": "...", "active": true
+  "txt_name": "_cf-custom-hostname.links.alice.com", "txt_value": "0e2d5a7f-...",
+  "target": "customers.subcult.tv", "created_at": "...", "active": true,
+  "mode": "cloudflare", "status": "pending",
+  "records": [
+    {"type": "CNAME", "name": "links.alice.com", "value": "customers.subcult.tv", "purpose": "routing"},
+    {"type": "TXT", "name": "_cf-custom-hostname.links.alice.com", "value": "0e2d5a7f-...", "purpose": "ownership"}
+  ],
+  "errors": ["custom hostname does not CNAME to this zone."],
+  "checked_at": "2026-10-02T12:00:00Z"
 }
 ```
 
-`active` is false when the owner's plan no longer covers the domain. The domain stays attached, but the page isn't served on it and `/internal/tls-ask` refuses it (see [Plans](#plans)).
+- `active` is false when the owner's plan no longer covers the domain. The domain stays attached, but the page isn't served on it and `/internal/tls-ask` refuses it (see [Plans](#plans)).
+- `status` is `pending`, `active` (verified) or `error` (Cloudflare reports a state that won't fix itself; `errors` says what to do).
+- `records` lists the DNS records to add. `purpose` is `routing` (CNAME to `target`), `ownership` (TXT) or `certificate` (certificate validation records Cloudflare asks for, Cloudflare mode only, hidden once verified).
+- `errors` holds readable problems: Cloudflare's `verification_errors` and `ssl.validation_errors`, plus our explanation of terminal states. Empty in DNS mode.
+- `checked_at` is when Cloudflare was last asked; null in DNS mode.
 
-Setup instructions shown to the user: add the TXT record, point the hostname at `target` with a CNAME (or A/AAAA for apex domains), then press Verify. TLS is issued automatically on first request after verification.
+### DNS mode
+
+Used when `ZELDA_CLOUDFLARE_TOKEN` or `ZELDA_CLOUDFLARE_ZONE_ID` is unset. `txt_name` is `_zelda.<hostname>` and `txt_value` is `zelda-verify=<token>`. The user adds that TXT record, points the hostname at `target` with a CNAME (or A/AAAA for apex domains), then presses Verify. Verify checks both records and returns `422 dns_not_ready` with the reason until they match. Caddy issues the certificate on the first request after asking `/internal/tls-ask`.
+
+### Cloudflare mode
+
+Used when both `ZELDA_CLOUDFLARE_TOKEN` and `ZELDA_CLOUDFLARE_ZONE_ID` are set ([setup](custom-domains-cloudflare.md)).
+
+- Adding a domain creates a Cloudflare custom hostname (`ssl.method: http`, `ssl.type: dv`) and stores its ID. If Cloudflare refuses the hostname the response is `422 cloudflare_rejected` with Cloudflare's message; if Cloudflare can't be reached or rejects our token it is `502 cloudflare_unavailable`. Either way no domain is kept. A hostname left in Cloudflare by an earlier failed attempt is reused.
+- `txt_name`/`txt_value` are Cloudflare's `ownership_verification` record, or empty when Cloudflare didn't send one.
+- Verify reads the hostname from Cloudflare and returns `200 Domain`. `verified` becomes true only when the hostname status and the certificate status are both `active`; until then `status` and `errors` explain what's missing. Domains added before Cloudflare mode was enabled are registered with Cloudflare on their next Verify.
+- Every 10 minutes the server rechecks up to 50 pending domains that weren't checked in the last 5 minutes, so users don't have to keep pressing Verify. If Cloudflare has dropped a pending hostname, `status` becomes `error` and the domain is no longer rechecked; the user removes and re-adds it.
+- Deleting a domain deletes the custom hostname first. A hostname Cloudflare no longer has counts as deleted; any other failure returns `502 cloudflare_unavailable` and keeps the domain. Deleting a page or account removes its custom hostnames too; failures there are logged, and the hostname must then be removed in the Cloudflare dashboard.
+- `/internal/tls-ask` keeps answering as in DNS mode. Cloudflare issues the certificates, so nothing calls it.
 
 ## Uploads
 
