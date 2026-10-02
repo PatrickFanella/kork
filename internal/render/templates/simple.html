@@ -1,0 +1,32 @@
+{{define "simple"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}}</title>
+<meta name="description" content="{{.AppName}} builds themed link pages: socials, payments, QR codes and more on one page.">
+<link rel="stylesheet" href="/static/site.css?v={{.AssetVersion}}">
+</head>
+<body>
+<main class="site">
+  <p class="brand"><a href="/">{{.AppName}}</a></p>
+  {{if .Landing}}
+  <h1>Every link you share, on one themed page.</h1>
+  <p class="lede">Socials, Cash App, PayPal, Venmo, crypto addresses, QR codes, music and video embeds, a contact card. Pick a theme, publish at your own name or your own domain.</p>
+  <p class="actions"><a class="cta" href="/app/signup">Make your page</a> <a href="/app/login">Log in</a></p>
+  <ul class="features">
+    <li><strong>{{.ServiceCount}} services</strong> with icons and handle checks</li>
+    <li><strong>Payments</strong>: Cash App, PayPal, Venmo, Ko-fi, Zelle, Bitcoin and more</li>
+    <li><strong>QR codes</strong> for the whole page or any single link</li>
+    <li><strong>Custom domains</strong> with automatic HTTPS</li>
+    <li><strong>No trackers</strong>: counts are anonymous daily totals</li>
+  </ul>
+  {{else}}
+  <h1>{{.Heading}}</h1>
+  <p class="lede">{{.Message}}</p>
+  <p class="actions"><a href="/">Go home</a></p>
+  {{end}}
+</main>
+</body>
+</html>
+{{end}}

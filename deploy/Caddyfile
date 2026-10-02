@@ -1,0 +1,27 @@
+{
+	email {$ACME_EMAIL}
+	on_demand_tls {
+		# Caddy asks the app before issuing a certificate for an unknown host.
+		# The app approves only the base host and verified custom domains.
+		ask http://zelda:8080/internal/tls-ask
+	}
+}
+
+(app) {
+	@internal path /internal/*
+	respond @internal 404
+	encode zstd gzip
+	reverse_proxy zelda:8080
+}
+
+{$ZELDA_HOST} {
+	import app
+}
+
+# Every other hostname: custom domains, certificates issued on demand.
+https:// {
+	tls {
+		on_demand
+	}
+	import app
+}

@@ -1,0 +1,47 @@
+# Production-shaped stack: Postgres, the app, and Caddy for TLS (including
+# on-demand certificates for verified custom domains). Copy .env.example to .env.
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: zelda
+      POSTGRES_DB: zelda
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zelda"]
+      interval: 5s
+      retries: 10
+
+  zelda:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      ZELDA_DATABASE_URL: postgres://zelda:${POSTGRES_PASSWORD}@postgres:5432/zelda?sslmode=disable
+    volumes:
+      - uploads:/data
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [zelda]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      ZELDA_HOST: ${ZELDA_HOST:?set ZELDA_HOST}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+
+volumes:
+  pgdata:
+  uploads:
+  caddy_data:

@@ -1,0 +1,8 @@
+{
+  "name": "zelda-icons",
+  "private": true,
+  "type": "module",
+  "description": "Regenerates internal/icons/brands_gen.go from Simple Icons",
+  "scripts": { "gen": "node gen-icons.mjs" },
+  "devDependencies": { "simple-icons": "16.33.0" }
+}

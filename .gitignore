@@ -1,0 +1,7 @@
+/data/
+/bin/
+.env
+web/node_modules/
+web/dist/*
+!web/dist/.gitkeep
+scripts/icons/node_modules/

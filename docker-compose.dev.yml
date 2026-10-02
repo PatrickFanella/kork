@@ -1,0 +1,14 @@
+# Local Postgres for `make run` and `make test`.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: zelda
+      POSTGRES_PASSWORD: zelda
+      POSTGRES_DB: zelda
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - devpgdata:/var/lib/postgresql/data
+volumes:
+  devpgdata:
