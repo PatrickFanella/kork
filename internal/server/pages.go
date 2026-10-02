@@ -404,6 +404,7 @@ func (s *Server) handleCreateBlock(w http.ResponseWriter, r *http.Request) {
 		Type    string          `json:"type"`
 		Data    json.RawMessage `json:"data"`
 		Enabled *bool           `json:"enabled"`
+		scheduleInput
 	}
 	if !decodeJSON(w, r, &body) {
 		return
@@ -420,8 +421,12 @@ func (s *Server) handleCreateBlock(w http.ResponseWriter, r *http.Request) {
 	if s.rejectBlocked(w, r, body.Type, data) {
 		return
 	}
+	var sched store.Schedule
+	if !body.applyTo(w, &sched) {
+		return
+	}
 	enabled := body.Enabled == nil || *body.Enabled
-	b, err := s.store.CreateBlock(r.Context(), p.ID, body.Type, data, enabled)
+	b, err := s.store.CreateBlock(r.Context(), p.ID, body.Type, data, enabled, sched)
 	if errors.Is(err, store.ErrLimit) {
 		writeErr(w, http.StatusUnprocessableEntity, "limit", "a page can have up to 100 blocks", "")
 		return
@@ -455,8 +460,12 @@ func (s *Server) handleUpdateBlock(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Data    json.RawMessage `json:"data"`
 		Enabled *bool           `json:"enabled"`
+		scheduleInput
 	}
 	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if !body.applyTo(w, &b.Schedule) {
 		return
 	}
 	if len(body.Data) > 0 {

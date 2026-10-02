@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"git.subcult.tv/subculture-collective/zelda/internal/blocks"
@@ -85,11 +86,24 @@ func (s *Server) renderPage(w http.ResponseWriter, r *http.Request, p *store.Pag
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	now := s.now()
 	list := make([]blocks.Block, 0, len(stored))
+	var badges map[string]render.Badge
 	for _, b := range stored {
-		if b.Enabled {
-			list = append(list, blocks.Block{ID: b.ID, Type: b.Type, Data: b.Data})
+		if !b.Enabled {
+			continue
 		}
+		if !b.VisibleAt(now) {
+			if !preview {
+				continue
+			}
+			if badges == nil {
+				badges = map[string]render.Badge{}
+			}
+			text, at := scheduleBadge(b.Schedule, now)
+			badges[b.ID] = render.NewBadge(text, at)
+		}
+		list = append(list, blocks.Block{ID: b.ID, Type: b.Type, Data: b.Data})
 	}
 	theme := themeOf(p)
 	ctx := blocks.Context{
@@ -103,7 +117,7 @@ func (s *Server) renderPage(w http.ResponseWriter, r *http.Request, p *store.Pag
 	view := render.Page{
 		AppName: s.cfg.AppName, BaseURL: s.cfg.BaseURL, Slug: p.Slug, Title: p.Title, Bio: p.Bio,
 		CanonicalURL: canonical, Theme: theme, Items: blocks.Build(ctx, list),
-		Preview: preview, Live: p.Live(), Nonce: n,
+		Preview: preview, Live: p.Live(), Nonce: n, Badges: badges,
 	}
 	if p.AvatarUploadID != nil {
 		view.Avatar = uploadURL(*p.AvatarUploadID)
@@ -124,7 +138,7 @@ func (s *Server) renderPage(w http.ResponseWriter, r *http.Request, p *store.Pag
 	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'self' 'nonce-"+n+"'; script-src 'self'; img-src 'self' data:; "+
 		"frame-src "+frameSources+"; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'self'")
 	if !preview {
-		h.Set("Cache-Control", "public, max-age=60")
+		h.Set("Cache-Control", "public, max-age="+strconv.Itoa(publicCacheSeconds(stored, now)))
 		if !botUA.MatchString(r.UserAgent()) {
 			_ = s.store.Count(r.Context(), p.ID, store.ZeroBlockID)
 		}
@@ -138,7 +152,7 @@ func (s *Server) handleTrack(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	if b, p, err := s.store.LiveBlock(r.Context(), id); err == nil {
+	if b, p, err := s.store.LiveBlock(r.Context(), id, s.now()); err == nil {
 		_ = s.store.Count(r.Context(), p.ID, b.ID)
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -152,7 +166,7 @@ func (s *Server) handleVCard(w http.ResponseWriter, r *http.Request) {
 		s.notFoundPage(w)
 		return
 	}
-	b, _, err := s.store.LiveBlock(r.Context(), id)
+	b, _, err := s.store.LiveBlock(r.Context(), id, s.now())
 	if errors.Is(err, store.ErrNotFound) {
 		b = s.ownerDraftBlock(r, id)
 	}

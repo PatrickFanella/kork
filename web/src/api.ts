@@ -1,3 +1,4 @@
+import type { BlockSchedule } from "./lib/schedule";
 // Typed client for the Kork (code name zelda) JSON API. See docs/api.md for the contract.
 
 export interface User {
@@ -131,6 +132,9 @@ export interface Block {
   enabled: boolean;
   position: number;
   label: string;
+  /** RFC 3339 UTC; null means no bound. Missing on older servers. */
+  starts_at?: string | null;
+  ends_at?: string | null;
 }
 
 export interface Domain {
@@ -195,6 +199,18 @@ export interface Upload {
   content_type: string;
   size: number;
 }
+
+export interface Account {
+  user: User;
+  /** Address waiting for confirmation; the account keeps `user.email` until then. */
+  pending_email: string | null;
+  /** Terms version accepted at signup; null for accounts created before terms existed. */
+  terms_version: string | null;
+  terms_accepted_at: string | null;
+}
+
+/** Same-origin URL of the account export ZIP (a plain GET download). */
+export const EXPORT_URL = "/api/account/export";
 
 export type ReportReason = "spam" | "scam" | "phishing" | "impersonation" | "illegal" | "other";
 
@@ -322,8 +338,8 @@ export function unwrapUser(body: unknown): User {
 export const api = {
   // Auth
   me: () => request<unknown>("GET", "/api/auth/me").then(unwrapUser),
-  signup: (email: string, password: string) =>
-    request<unknown>("POST", "/api/auth/signup", { email, password }).then(unwrapUser),
+  signup: (email: string, password: string, acceptTerms: boolean) =>
+    request<unknown>("POST", "/api/auth/signup", { email, password, accept_terms: acceptTerms }).then(unwrapUser),
   login: (email: string, password: string) =>
     request<unknown>("POST", "/api/auth/login", { email, password }).then(unwrapUser),
   logout: () => request<void>("POST", "/api/auth/logout"),
@@ -333,6 +349,16 @@ export const api = {
   forgot: (email: string) => request<void>("POST", "/api/auth/forgot", { email }),
   reset: (token: string, password: string) =>
     request<void>("POST", "/api/auth/reset", { token, password }),
+
+  // Account settings
+  account: () => request<Account>("GET", "/api/account"),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<void>("POST", "/api/account/password", { current_password: currentPassword, new_password: newPassword }),
+  changeEmail: (email: string, password: string) =>
+    request<Account>("POST", "/api/account/email", { email, password }),
+  confirmEmail: (token: string) =>
+    request<unknown>("POST", "/api/account/email/confirm", { token }).then(unwrapUser),
+  deleteAccount: (password: string) => request<void>("DELETE", "/api/account", { password }),
 
   // Catalog
   catalog: () => request<Catalog>("GET", "/api/catalog"),
@@ -351,9 +377,13 @@ export const api = {
   qrUrl: (id: string) => `/api/pages/${enc(id)}/qr.svg`,
 
   // Blocks
-  createBlock: (pageId: string, type: BlockType, data: BlockData, enabled = true) =>
-    request<Block>("POST", `/api/pages/${enc(pageId)}/blocks`, { type, data, enabled }),
-  updateBlock: (pageId: string, blockId: string, patch: { data?: BlockData; enabled?: boolean }) =>
+  createBlock: (pageId: string, type: BlockType, data: BlockData, enabled = true, schedule?: BlockSchedule) =>
+    request<Block>("POST", `/api/pages/${enc(pageId)}/blocks`, { type, data, enabled, ...schedule }),
+  updateBlock: (
+    pageId: string,
+    blockId: string,
+    patch: { data?: BlockData; enabled?: boolean } & Partial<BlockSchedule>,
+  ) =>
     request<Block>("PATCH", `/api/pages/${enc(pageId)}/blocks/${enc(blockId)}`, patch),
   deleteBlock: (pageId: string, blockId: string) =>
     request<void>("DELETE", `/api/pages/${enc(pageId)}/blocks/${enc(blockId)}`),

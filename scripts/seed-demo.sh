@@ -13,7 +13,7 @@ api() {
     -H 'X-Requested-With: zelda' ${body:+-d "$body"} "$base$path"
 }
 email="demo-$RANDOM@example.com"
-api POST /api/auth/signup "{\"email\":\"$email\",\"password\":\"demo password 123\"}" >/dev/null
+api POST /api/auth/signup "{\"email\":\"$email\",\"password\":\"demo password 123\",\"accept_terms\":true}" >/dev/null
 sleep 0.5
 token=$(grep -o 'verify?token=[A-Za-z0-9_-]*' "$log" | tail -1 | cut -d= -f2)
 api POST /api/auth/verify "{\"token\":\"$token\"}" >/dev/null

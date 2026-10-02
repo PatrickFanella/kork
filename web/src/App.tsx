@@ -9,6 +9,7 @@ import { Dashboard } from "./screens/Dashboard";
 import { PageEditor } from "./screens/editor/PageEditor";
 import { AdminScreen } from "./screens/Admin";
 import { NotFound } from "./screens/NotFound";
+import { ConfirmEmailScreen, SettingsScreen } from "./screens/Settings";
 
 export function App() {
   return (
@@ -23,11 +24,13 @@ export function App() {
             </Route>
             <Route path="/reset" element={<ResetScreen />} />
             <Route path="/verify" element={<VerifyScreen />} />
+            <Route path="/confirm-email" element={<ConfirmEmailScreen />} />
             <Route element={<RequireAuth />}>
               <Route element={<AppShell />}>
                 <Route index element={<Dashboard />} />
                 <Route path="/pages/:id" element={<PageEditor />} />
                 <Route path="/admin" element={<AdminScreen />} />
+                <Route path="/settings" element={<SettingsScreen />} />
                 <Route path="*" element={<NotFound />} />
               </Route>
             </Route>

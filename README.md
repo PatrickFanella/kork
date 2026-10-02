@@ -81,6 +81,12 @@ docker compose -p zelda -f docker-compose.proxy.yml up -d zelda
 
 The `.env` file is not backed up; recreate it from `.env.example` (a new `POSTGRES_PASSWORD` is fine when restoring into a fresh volume).
 
+### Terms and privacy
+
+`/terms` and `/privacy` are rendered from `internal/render/templates/legal.html`. The text is a draft awaiting owner review; `render.TermsVersion` (`2026-10-02-draft`) is stored with each new signup, so change it whenever the wording changes. The privacy policy describes what the code stores; update it when that changes. `ZELDA_CONTACT_EMAIL` (default `hello@subcult.tv`) is the contact address shown on both pages.
+
+Users manage their account at `/app/settings`: change password or email, download a ZIP of their data, or delete the account.
+
 ### Abuse controls
 
 - Email verification before publishing.
