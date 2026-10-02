@@ -24,6 +24,7 @@ export function AppShell() {
           <NavLink to="/" end>
             Pages
           </NavLink>
+          <NavLink to="/settings">Settings</NavLink>
           {user.is_admin && <NavLink to="/admin">Admin</NavLink>}
         </nav>
         <div className="topbar-user">

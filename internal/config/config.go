@@ -27,6 +27,8 @@ type Config struct {
 	AdminEmails map[string]bool
 	// CustomDomains enables attaching user domains (needs on-demand TLS in front).
 	CustomDomains bool
+	// ContactEmail is shown on the terms and privacy pages.
+	ContactEmail string
 
 	SMTPHost string
 	SMTPPort int
@@ -56,6 +58,7 @@ func Load() (*Config, error) {
 		SMTPUser:     env("ZELDA_SMTP_USER", ""),
 		SMTPPass:     env("ZELDA_SMTP_PASSWORD", ""),
 		MailFrom:     env("ZELDA_MAIL_FROM", ""),
+		ContactEmail: env("ZELDA_CONTACT_EMAIL", "hello@subcult.tv"),
 	}
 	c.CustomDomains = env("ZELDA_CUSTOM_DOMAINS", "true") == "true"
 	c.AdminEmails = map[string]bool{}

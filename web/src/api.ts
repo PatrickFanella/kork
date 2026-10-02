@@ -200,6 +200,18 @@ export interface Upload {
   size: number;
 }
 
+export interface Account {
+  user: User;
+  /** Address waiting for confirmation; the account keeps `user.email` until then. */
+  pending_email: string | null;
+  /** Terms version accepted at signup; null for accounts created before terms existed. */
+  terms_version: string | null;
+  terms_accepted_at: string | null;
+}
+
+/** Same-origin URL of the account export ZIP (a plain GET download). */
+export const EXPORT_URL = "/api/account/export";
+
 export type ReportReason = "spam" | "scam" | "impersonation" | "illegal" | "other";
 
 export interface Report {
@@ -316,8 +328,8 @@ export function unwrapUser(body: unknown): User {
 export const api = {
   // Auth
   me: () => request<unknown>("GET", "/api/auth/me").then(unwrapUser),
-  signup: (email: string, password: string) =>
-    request<unknown>("POST", "/api/auth/signup", { email, password }).then(unwrapUser),
+  signup: (email: string, password: string, acceptTerms: boolean) =>
+    request<unknown>("POST", "/api/auth/signup", { email, password, accept_terms: acceptTerms }).then(unwrapUser),
   login: (email: string, password: string) =>
     request<unknown>("POST", "/api/auth/login", { email, password }).then(unwrapUser),
   logout: () => request<void>("POST", "/api/auth/logout"),
@@ -327,6 +339,16 @@ export const api = {
   forgot: (email: string) => request<void>("POST", "/api/auth/forgot", { email }),
   reset: (token: string, password: string) =>
     request<void>("POST", "/api/auth/reset", { token, password }),
+
+  // Account settings
+  account: () => request<Account>("GET", "/api/account"),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<void>("POST", "/api/account/password", { current_password: currentPassword, new_password: newPassword }),
+  changeEmail: (email: string, password: string) =>
+    request<Account>("POST", "/api/account/email", { email, password }),
+  confirmEmail: (token: string) =>
+    request<unknown>("POST", "/api/account/email/confirm", { token }).then(unwrapUser),
+  deleteAccount: (password: string) => request<void>("DELETE", "/api/account", { password }),
 
   // Catalog
   catalog: () => request<Catalog>("GET", "/api/catalog"),
