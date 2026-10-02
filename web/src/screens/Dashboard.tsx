@@ -6,6 +6,8 @@ import { SlugStatusBadge, slugStatusError } from "../components/SlugStatus";
 import { ConfirmButton, CopyButton, Notice, PageLoading, Spinner, TextField, formatRelative, useDocumentTitle } from "../components/ui";
 import { useSlugCheck } from "../lib/useSlugCheck";
 import { MAX_PAGES, normalizeSlug } from "../lib/validate";
+import { UpgradeNote } from "../components/Pro";
+import { usePlan } from "../plan";
 
 /** The public base ("https://host/") inferred from an existing page URL. */
 export function publicBase(pages: PageSummary[]): string {
@@ -19,6 +21,8 @@ export function Dashboard() {
   const [pages, setPages] = useState<PageSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const { plan } = usePlan();
+  const maxPages = plan?.pages ?? MAX_PAGES;
 
   const load = useCallback(() => {
     setError(null);
@@ -52,7 +56,8 @@ export function Dashboard() {
   }
   if (!pages) return <PageLoading />;
 
-  const atLimit = pages.length >= MAX_PAGES;
+  const atLimit = pages.length >= maxPages;
+  const proHasMore = plan !== null && plan.plan !== "pro" && plan.pro.pages > maxPages;
   const base = publicBase(pages);
 
   return (
@@ -61,7 +66,7 @@ export function Dashboard() {
         <div>
           <h1>Your pages</h1>
           <p className="muted">
-            {pages.length} of {MAX_PAGES} pages used
+            {pages.length} of {maxPages} pages used
           </p>
         </div>
         {!creating && (
@@ -70,7 +75,7 @@ export function Dashboard() {
             className="btn btn-primary"
             onClick={() => setCreating(true)}
             disabled={atLimit}
-            title={atLimit ? `You can have up to ${MAX_PAGES} pages.` : undefined}
+            title={atLimit ? `You can have up to ${maxPages} pages.` : undefined}
           >
             <Icon name="plus" />
             <span>New page</span>
@@ -78,8 +83,13 @@ export function Dashboard() {
         )}
       </div>
 
-      {atLimit && !creating && (
-        <p className="muted small">You've reached the {MAX_PAGES}-page limit. Delete a page to make room for another.</p>
+      {atLimit && !creating && !proHasMore && (
+        <p className="muted small">You've reached the {maxPages}-page limit. Delete a page to make room for another.</p>
+      )}
+      {atLimit && !creating && proHasMore && plan && (
+        <UpgradeNote>
+          Free accounts can have {maxPages} pages. Pro allows {plan.pro.pages}.
+        </UpgradeNote>
       )}
 
       {creating && !atLimit && (

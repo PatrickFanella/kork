@@ -33,6 +33,19 @@ describe("parseApiError", () => {
   });
 });
 
+describe("upgrade_required", () => {
+  it("keeps the feature key", () => {
+    const err = parseApiError(
+      403,
+      JSON.stringify({ error: { code: "upgrade_required", message: "Custom domains are part of Pro.", field: "hostname", feature: "custom_domains" } }),
+    );
+    expect(err.code).toBe("upgrade_required");
+    expect(err.feature).toBe("custom_domains");
+    expect(err.field).toBe("hostname");
+    expect(err.message).toBe("Custom domains are part of Pro.");
+  });
+});
+
 describe("unwrapUser", () => {
   const user = { id: "1", email: "a@b.c", email_verified: false, is_admin: false, created_at: "" };
   it("accepts wrapped and bare users", () => {

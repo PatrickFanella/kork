@@ -2336,3 +2336,31 @@ a.editor-url:hover {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* ---------- Plans ---------- */
+
+.badge-pro {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+.segmented-option .badge-pro {
+  margin-left: 6px;
+}
+.upgrade-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted);
+}
+.admin-date {
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+}

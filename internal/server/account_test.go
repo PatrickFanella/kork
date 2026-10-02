@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"git.subcult.tv/subculture-collective/zelda/internal/plans"
 	"git.subcult.tv/subculture-collective/zelda/internal/render"
 	"git.subcult.tv/subculture-collective/zelda/internal/store"
 )
@@ -198,6 +199,7 @@ func buildAccount(t *testing.T, e *env, alice *client) (string, string) {
 		"theme": map[string]any{"preset": "paper"}}, nil); code != 200 {
 		t.Fatalf("update page: %d", code)
 	}
+	alice.setPlan(plans.Pro, nil) // custom domains need Pro
 	if code := alice.do("POST", "/api/pages/"+page.ID+"/domains", map[string]string{"hostname": "links.alice.example"}, nil); code != 201 {
 		t.Fatalf("add domain: %d", code)
 	}
@@ -350,6 +352,7 @@ func TestDeleteAccount(t *testing.T) {
 		t.Fatalf("slug not freed: %d", code)
 	}
 	// Hostnames are unique, so this only succeeds if the old domain row is gone.
+	bob.setPlan(plans.Pro, nil)
 	if code := bob.do("POST", "/api/pages/"+page.ID+"/domains", map[string]string{"hostname": "links.alice.example"}, nil); code != 201 {
 		t.Fatalf("domain row survived: %d", code)
 	}

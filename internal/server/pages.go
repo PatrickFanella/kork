@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"git.subcult.tv/subculture-collective/zelda/internal/blocks"
 	"git.subcult.tv/subculture-collective/zelda/internal/catalog"
 	"git.subcult.tv/subculture-collective/zelda/internal/icons"
+	"git.subcult.tv/subculture-collective/zelda/internal/plans"
 	"git.subcult.tv/subculture-collective/zelda/internal/qr"
 	"git.subcult.tv/subculture-collective/zelda/internal/store"
 )
@@ -122,10 +124,13 @@ type domainView struct {
 	TXTName  string `json:"txt_name"`
 	TXTValue string `json:"txt_value"`
 	Target   string `json:"target"`
+	// Active is false when the owner's plan no longer covers the domain;
+	// it stays attached but the page isn't served on it.
+	Active bool `json:"active"`
 }
 
 func (s *Server) domainView(d *store.Domain) domainView {
-	return domainView{d, "_zelda." + d.Hostname, "zelda-verify=" + d.VerifyToken, s.cfg.DomainTarget}
+	return domainView{d, "_zelda." + d.Hostname, "zelda-verify=" + d.VerifyToken, s.cfg.DomainTarget, true}
 }
 
 type pageView struct {
@@ -156,8 +161,15 @@ func (s *Server) writePage(w http.ResponseWriter, r *http.Request, status int, p
 		u := uploadURL(*p.AvatarUploadID)
 		v.AvatarURL = &u
 	}
+	served, err := s.domainsServed(r.Context(), p)
+	if err != nil {
+		s.serverErr(w, r, err)
+		return
+	}
 	for _, d := range ds {
-		v.Domains = append(v.Domains, s.domainView(d))
+		dv := s.domainView(d)
+		dv.Active = served(d.ID)
+		v.Domains = append(v.Domains, dv)
 	}
 	writeJSON(w, status, v)
 }
@@ -212,13 +224,20 @@ func (s *Server) handleCreatePage(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnprocessableEntity, "invalid", "title must be 80 characters or fewer", "title")
 		return
 	}
+	limits, ok := s.limitsFor(w, r)
+	if !ok {
+		return
+	}
 	theme, _ := json.Marshal(catalog.DefaultTheme())
-	p, err := s.store.CreatePage(r.Context(), userFrom(r).ID, body.Slug, title, theme)
+	p, err := s.store.CreatePageLimit(r.Context(), userFrom(r).ID, body.Slug, title, theme, limits.Pages)
 	switch {
 	case errors.Is(err, store.ErrConflict):
 		writeErr(w, http.StatusConflict, "slug_taken", "that name is already taken", "slug")
+	case errors.Is(err, store.ErrLimit) && plans.ProLimits().Pages > limits.Pages:
+		writeUpgrade(w, plans.LimitPages, fmt.Sprintf("Free accounts can have up to %d pages. Pro allows %d.",
+			limits.Pages, plans.ProLimits().Pages), "")
 	case errors.Is(err, store.ErrLimit):
-		writeErr(w, http.StatusUnprocessableEntity, "limit", "you can have up to 5 pages", "")
+		writeErr(w, http.StatusUnprocessableEntity, "limit", fmt.Sprintf("you can have up to %d pages", limits.Pages), "")
 	case err != nil:
 		s.serverErr(w, r, err)
 	default:
@@ -304,6 +323,12 @@ func (s *Server) handleUpdatePage(w http.ResponseWriter, r *http.Request) {
 		}
 		if t.Background.Kind != "image" {
 			t.Background.ImageUploadID = ""
+		}
+		// Turning the footer credit off needs Pro. A lapsed Pro page keeps
+		// the stored flag (rendering ignores it), so saving other theme
+		// changes still works.
+		if t.HideBranding && !themeOf(p).HideBranding && !s.requireFeature(w, r, plans.RemoveBranding, "hide_branding") {
+			return
 		}
 		p.Theme, _ = json.Marshal(t)
 	}
@@ -406,6 +431,9 @@ func (s *Server) handleCreateBlock(w http.ResponseWriter, r *http.Request) {
 	if s.rejectBlocked(w, r, body.Type, data) {
 		return
 	}
+	if f, ok := body.setsBound(); ok && !s.requireFeature(w, r, plans.ScheduledLinks, f) {
+		return
+	}
 	var sched store.Schedule
 	if !body.applyTo(w, &sched) {
 		return
@@ -459,6 +487,9 @@ func (s *Server) handleUpdateBlock(w http.ResponseWriter, r *http.Request) {
 		scheduleInput
 	}
 	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if f, ok := body.setsBound(); ok && !s.requireFeature(w, r, plans.ScheduledLinks, f) {
 		return
 	}
 	if !body.applyTo(w, &b.Schedule) {

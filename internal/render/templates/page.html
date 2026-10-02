@@ -102,8 +102,10 @@
     <span aria-hidden="true">·</span>
     <button type="button" class="link-button" data-report>Report</button>
     <span aria-hidden="true">·</span>
+    {{- if not .HideBranding}}
     <a href="{{.BaseURL}}">Made with {{.AppName}}</a>
     <span aria-hidden="true">·</span>
+    {{- end}}
     <a href="{{.BaseURL}}/terms">Terms</a>
     <span aria-hidden="true">·</span>
     <a href="{{.BaseURL}}/privacy">Privacy</a>

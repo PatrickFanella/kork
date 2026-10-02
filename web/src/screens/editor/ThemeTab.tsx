@@ -2,9 +2,11 @@ import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import { COLOR_KEYS, api, errorMessage, type BackgroundKind, type CatalogTheme, type Theme, type ThemeColors } from "../../api";
 import { useCatalog } from "../../catalog";
 import { Icon } from "../../components/Icon";
-import { ImageField, Notice, SelectField, Spinner, uploadUrl } from "../../components/ui";
+import { ImageField, Notice, SelectField, Spinner, Switch, uploadUrl } from "../../components/ui";
 import { contrastRatio, normalizeHex } from "../../lib/validate";
 import type { EditorProps } from "./types";
+import { ProBadge, UpgradeNote } from "../../components/Pro";
+import { planAllows, usePlan } from "../../plan";
 
 const COLOR_LABELS: Record<keyof ThemeColors, string> = {
   bg: "Background",
@@ -171,6 +173,8 @@ export function ThemeTab({ page, setPage, saved }: EditorProps) {
       </section>
 
       <BackgroundSection theme={draft} onChange={(background) => update({ background })} />
+
+      <FooterSection hidden={draft.hide_branding === true} onChange={(hide_branding) => update({ hide_branding })} />
     </div>
   );
 }
@@ -303,6 +307,30 @@ function BackgroundSection({ theme, onChange }: { theme: Theme; onChange: (bg: T
           />
           {!bg.image_upload_id && <p className="muted small">Until you upload an image, the Background color is used.</p>}
         </>
+      )}
+    </section>
+  );
+}
+
+function FooterSection({ hidden, onChange }: { hidden: boolean; onChange: (hidden: boolean) => void }) {
+  const { plan } = usePlan();
+  const allowed = planAllows(plan, "remove_branding");
+  return (
+    <section className="card section" aria-labelledby="footer-heading">
+      <div className="section-row">
+        <div className="section-intro">
+          <h2 id="footer-heading">
+            Footer {!allowed && <ProBadge />}
+          </h2>
+          <p className="muted small">Remove the “Made with Kork” link at the bottom of your page. Share, Report, Terms and Privacy stay.</p>
+        </div>
+        {/* A lapsed Pro page can still switch it off; turning it on needs Pro. */}
+        <Switch checked={hidden} onChange={onChange} label="Hide the footer credit" disabled={!allowed && !hidden} />
+      </div>
+      {!allowed && (
+        <UpgradeNote>
+          {hidden ? "Your page shows the footer credit again until you have Pro." : "Hiding the footer credit is part of Pro."}
+        </UpgradeNote>
       )}
     </section>
   );

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -23,6 +24,11 @@ import (
 )
 
 func main() {
+	// `zelda -healthcheck` lets Docker check the distroless image, which has
+	// no shell or curl.
+	if len(os.Args) > 1 && os.Args[1] == "-healthcheck" {
+		os.Exit(healthcheck())
+	}
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	if err := run(log); err != nil {
 		log.Error("fatal", "err", err)
@@ -131,4 +137,25 @@ func screener(ctx context.Context, cfg *config.Config, log *slog.Logger) screen.
 		return nil
 	}
 	return list
+}
+
+// healthcheck asks the local server's /healthz, which also checks the database.
+func healthcheck() int {
+	addr := os.Getenv("ZELDA_ADDR")
+	if addr == "" {
+		addr = ":8080"
+	}
+	if strings.HasPrefix(addr, ":") {
+		addr = "127.0.0.1" + addr
+	}
+	client := &http.Client{Timeout: 3 * time.Second}
+	res, err := client.Get("http://" + addr + "/healthz")
+	if err != nil {
+		return 1
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return 1
+	}
+	return 0
 }

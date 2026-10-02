@@ -99,6 +99,8 @@ export interface Theme {
   button_shape: string;
   layout: string;
   background: ThemeBackground;
+  /** Hide the "Made with Kork" footer link; honored only on Pro. */
+  hide_branding?: boolean;
 }
 
 export interface ThemePatch {
@@ -109,6 +111,7 @@ export interface ThemePatch {
   button_shape?: string;
   layout?: string;
   background?: Partial<ThemeBackground>;
+  hide_branding?: boolean;
 }
 
 export type BlockType =
@@ -168,6 +171,8 @@ export interface Domain {
   txt_value: string;
   target: string;
   created_at: string;
+  /** False when the owner's plan no longer covers the domain. Missing on older servers. */
+  active?: boolean;
 }
 
 export interface PageSummary {
@@ -216,8 +221,10 @@ export interface NameCount {
 }
 
 export interface Stats {
-  /** The range actually returned; the server caps it (30 days for now). */
+  /** The range actually returned; the server caps it at the plan's limit. */
   days?: number;
+  /** Longest range this account can request. */
+  max_days?: number;
   total_views: number;
   views: { day: string; count: number }[];
   /** `ctr` is clicks divided by page views over the range. */
@@ -317,17 +324,59 @@ export interface PendingUser {
   pages: string[];
 }
 
+export type PlanTier = "free" | "pro";
+
+export type PlanFeature = "custom_domains" | "remove_branding" | "custom_css" | "custom_fonts" | "scheduled_links";
+
+export interface PlanLimits {
+  /** The plan in force now; an expired Pro grant reports "free". */
+  plan: PlanTier;
+  pages: number;
+  stats_days: number;
+  custom_domains: number;
+  features: Partial<Record<PlanFeature, boolean>>;
+}
+
+/** The signed-in user's plan, from GET /api/auth/me. */
+export interface Plan extends PlanLimits {
+  stored_plan: PlanTier;
+  source?: "manual" | "patreon" | "stripe";
+  expires_at: string | null;
+  /** Set while custom domains keep working after Pro expired. */
+  domains_grace_until: string | null;
+  /** Pro's limits, for upgrade prompts. */
+  pro: PlanLimits;
+}
+
+/** A row in the admin user list. */
+export interface AdminUser {
+  id: string;
+  email: string;
+  email_verified: boolean;
+  suspended: boolean;
+  created_at: string;
+  plan: PlanTier;
+  plan_source: string | null;
+  plan_expires_at: string | null;
+  effective_plan: PlanTier;
+  domains_grace_until: string | null;
+  pages: number;
+}
+
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
   readonly field?: string;
+  /** Set on `upgrade_required`: the feature or limit the plan lacks. */
+  readonly feature?: string;
 
-  constructor(status: number, code: string, message: string, field?: string) {
+  constructor(status: number, code: string, message: string, field?: string, feature?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
     this.field = field;
+    this.feature = feature;
   }
 }
 
@@ -339,6 +388,7 @@ export function parseApiError(status: number, bodyText: string): ApiError {
   let code = `http_${status}`;
   let message = defaultMessage(status);
   let field: string | undefined;
+  let feature: string | undefined;
   if (bodyText) {
     try {
       const parsed: unknown = JSON.parse(bodyText);
@@ -349,13 +399,14 @@ export function parseApiError(status: number, bodyText: string): ApiError {
           if (typeof e.code === "string" && e.code) code = e.code;
           if (typeof e.message === "string" && e.message) message = e.message;
           if (typeof e.field === "string" && e.field) field = e.field;
+          if (typeof e.feature === "string" && e.feature) feature = e.feature;
         }
       }
     } catch {
       // Not JSON; keep the default message.
     }
   }
-  return new ApiError(status, code, message, field);
+  return new ApiError(status, code, message, field, feature);
 }
 
 function defaultMessage(status: number): string {
@@ -421,6 +472,7 @@ export function unwrapUser(body: unknown): User {
 export const api = {
   // Auth
   me: () => request<unknown>("GET", "/api/auth/me").then(unwrapUser),
+  plan: () => request<{ plan: Plan }>("GET", "/api/auth/me").then((r) => r.plan),
   signup: (email: string, password: string, acceptTerms: boolean) =>
     request<unknown>("POST", "/api/auth/signup", { email, password, accept_terms: acceptTerms }).then(unwrapUser),
   login: (email: string, password: string) =>
@@ -514,4 +566,7 @@ export const api = {
     request<void>("POST", `/api/admin/pages/${enc(id)}/suspend`, { suspended }),
   pendingUsers: () => request<PendingUser[]>("GET", "/api/admin/users/pending"),
   trustUser: (id: string) => request<void>("POST", `/api/admin/users/${enc(id)}/trust`),
+  adminUsers: (q: string) => request<AdminUser[]>("GET", `/api/admin/users?q=${enc(q)}`),
+  setUserPlan: (id: string, plan: PlanTier, expiresAt: string | null) =>
+    request<Plan>("POST", `/api/admin/users/${enc(id)}/plan`, { plan, expires_at: expiresAt }),
 };

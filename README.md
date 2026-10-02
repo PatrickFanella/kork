@@ -57,13 +57,15 @@ The end-to-end test (`internal/server/server_test.go`) drops and recreates the s
 3. Configure SMTP before opening signups. Unverified accounts can build pages but can't publish them. Email sign-up blocks also use it for visitors' confirmation links.
 4. Set `ZELDA_SECRET_KEY` (`openssl rand -base64 32`) to let email sign-up blocks send addresses to a creator's own Brevo list. It encrypts their Brevo API keys at rest. Without it, sign-up lists can only be kept in Kork.
 
-Stats are daily totals per page: views, clicks, referrer domains and countries (from Cloudflare's `CF-IPCountry` header). No IPs, cookies or user agents are stored. An hourly job deletes rows older than `ZELDA_STATS_RETENTION_DAYS` (default 400) and sends the opt-in weekly stats email on Mondays (UTC); the editor shows up to 30 days.
+Stats are daily totals per page: views, clicks, referrer domains and countries (from Cloudflare's `CF-IPCountry` header). No IPs, cookies or user agents are stored. An hourly job deletes rows older than `ZELDA_STATS_RETENTION_DAYS` (default 400) and sends the opt-in weekly stats email on Mondays (UTC); the editor shows up to 30 days on Free and 365 on Pro.
 
 Ports 80 and 443 must reach Caddy for ACME. If the service sits behind an existing edge proxy instead, drop the `caddy` service, forward the base host and custom domains to `zelda:8080`, keep `/internal/*` private, and reuse the same `ask` URL for on-demand TLS.
 
 ### Behind an existing proxy
 
 `docker-compose.proxy.yml` runs only Postgres and the app, published on `ZELDA_PUBLISH`. Point the proxy's hostname at that port, set `ZELDA_TRUST_PROXY=true`, and set `ZELDA_CUSTOM_DOMAINS=false` unless the proxy can issue certificates for arbitrary hostnames. The editor then hides the Domains tab.
+
+Plans: accounts are Free or Pro, and admins grant Pro by hand under Admin → Users. Limits and Pro features are in `internal/plans/plans.go`; see "Plans" in `docs/api.md`. `ZELDA_FREE_PAGE_LIMIT` (default 5) sets how many pages a Free account can create. Pro stats go back 365 days, so keep `ZELDA_STATS_RETENTION_DAYS` at 365 or more.
 
 Admins are the addresses in `ZELDA_ADMIN_EMAILS`, once verified. Without SMTP, verify an account by hand: `UPDATE users SET email_verified_at = now() WHERE lower(email) = '...'`.
 

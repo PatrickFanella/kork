@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
 import { CatalogProvider } from "./catalog";
+import { PlanProvider } from "./plan";
 import { Notice, PageLoading } from "./components/ui";
 import { AppShell } from "./components/AppShell";
 import { ForgotScreen, LoginScreen, ResetScreen, SignupScreen, VerifyScreen } from "./screens/AuthScreens";
@@ -15,27 +16,29 @@ export function App() {
   return (
     <BrowserRouter basename="/app">
       <AuthProvider>
-        <CatalogProvider>
-          <Routes>
-            <Route element={<GuestOnly />}>
-              <Route path="/login" element={<LoginScreen />} />
-              <Route path="/signup" element={<SignupScreen />} />
-              <Route path="/forgot" element={<ForgotScreen />} />
-            </Route>
-            <Route path="/reset" element={<ResetScreen />} />
-            <Route path="/verify" element={<VerifyScreen />} />
-            <Route path="/confirm-email" element={<ConfirmEmailScreen />} />
-            <Route element={<RequireAuth />}>
-              <Route element={<AppShell />}>
-                <Route index element={<Dashboard />} />
-                <Route path="/pages/:id" element={<PageEditor />} />
-                <Route path="/admin" element={<AdminScreen />} />
-                <Route path="/settings" element={<SettingsScreen />} />
-                <Route path="*" element={<NotFound />} />
+        <PlanProvider>
+          <CatalogProvider>
+            <Routes>
+              <Route element={<GuestOnly />}>
+                <Route path="/login" element={<LoginScreen />} />
+                <Route path="/signup" element={<SignupScreen />} />
+                <Route path="/forgot" element={<ForgotScreen />} />
               </Route>
-            </Route>
-          </Routes>
-        </CatalogProvider>
+              <Route path="/reset" element={<ResetScreen />} />
+              <Route path="/verify" element={<VerifyScreen />} />
+              <Route path="/confirm-email" element={<ConfirmEmailScreen />} />
+              <Route element={<RequireAuth />}>
+                <Route element={<AppShell />}>
+                  <Route index element={<Dashboard />} />
+                  <Route path="/pages/:id" element={<PageEditor />} />
+                  <Route path="/admin" element={<AdminScreen />} />
+                  <Route path="/settings" element={<SettingsScreen />} />
+                  <Route path="*" element={<NotFound />} />
+                </Route>
+              </Route>
+            </Routes>
+          </CatalogProvider>
+        </PlanProvider>
       </AuthProvider>
     </BrowserRouter>
   );

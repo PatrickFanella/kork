@@ -6,6 +6,7 @@ import { Icon } from "../components/Icon";
 import { Logo } from "../components/Logo";
 import { Notice, PageLoading, Spinner, TextField, formatDate, useDocumentTitle } from "../components/ui";
 import { PASSWORD_MIN, passwordProblem } from "../lib/validate";
+import { PlanSection } from "./PlanSection";
 
 type Errors = Record<string, string>;
 
@@ -60,6 +61,7 @@ export function SettingsScreen() {
           </p>
         </div>
       </div>
+      <PlanSection />
       <EmailSection account={account} onChange={setAccount} />
       <PasswordSection />
       <ExportSection />

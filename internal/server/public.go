@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"git.subcult.tv/subculture-collective/zelda/internal/blocks"
+	"git.subcult.tv/subculture-collective/zelda/internal/plans"
 	"git.subcult.tv/subculture-collective/zelda/internal/render"
 	"git.subcult.tv/subculture-collective/zelda/internal/store"
 )
@@ -51,6 +52,10 @@ func (s *Server) handlePublicPage(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCustomDomainPage(w http.ResponseWriter, r *http.Request) {
 	host := strings.ToLower(hostOnly(r.Host))
+	if !s.domainServed(r.Context(), host) {
+		s.notFoundPage(w)
+		return
+	}
 	p, err := s.store.PageByDomain(r.Context(), host)
 	if err != nil || !p.Live() {
 		s.notFoundPage(w)
@@ -120,6 +125,7 @@ func (s *Server) renderPage(w http.ResponseWriter, r *http.Request, p *store.Pag
 		AppName: s.cfg.AppName, BaseURL: s.cfg.BaseURL, Slug: p.Slug, Title: p.Title, Bio: p.Bio,
 		CanonicalURL: canonical, Theme: theme, Items: blocks.Build(ctx, list),
 		Preview: preview, Live: p.Live(), Nonce: n, Badges: badges,
+		HideBranding: theme.HideBranding && s.ownerCan(r.Context(), p.UserID, plans.RemoveBranding),
 	}
 	if p.AvatarUploadID != nil {
 		view.Avatar = uploadURL(*p.AvatarUploadID)
