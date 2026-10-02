@@ -11,6 +11,7 @@ import { PageEditor } from "./screens/editor/PageEditor";
 import { AdminScreen } from "./screens/Admin";
 import { NotFound } from "./screens/NotFound";
 import { ConfirmEmailScreen, SettingsScreen } from "./screens/Settings";
+import { PatreonCallbackScreen } from "./screens/PatreonCallback";
 
 export function App() {
   return (
@@ -33,6 +34,7 @@ export function App() {
                   <Route path="/pages/:id" element={<PageEditor />} />
                   <Route path="/admin" element={<AdminScreen />} />
                   <Route path="/settings" element={<SettingsScreen />} />
+                  <Route path="/patreon/callback" element={<PatreonCallbackScreen />} />
                   <Route path="*" element={<NotFound />} />
                 </Route>
               </Route>

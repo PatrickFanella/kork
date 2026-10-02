@@ -4,6 +4,7 @@ import type { PlanFeature, PlanLimits } from "../api";
 import { ProBadge } from "../components/Pro";
 import { formatDate } from "../components/ui";
 import { usePlan } from "../plan";
+import { BillingPanel } from "./BillingPanel";
 
 const FEATURE_NAMES: Record<PlanFeature, string> = {
   custom_domains: "Custom domains",
@@ -13,13 +14,13 @@ const FEATURE_NAMES: Record<PlanFeature, string> = {
   scheduled_links: "Scheduled links",
 };
 
-/** Settings section showing the plan, its limits, and the upgrade placeholder. */
+/** Settings section showing the plan, its limits, and the upgrade and billing controls. */
 export function PlanSection() {
   const { plan, refresh } = usePlan();
   const location = useLocation();
   const ref = useRef<HTMLElement>(null);
 
-  // Pick up a plan an admin just granted.
+  // Pick up a plan an admin, Stripe or Patreon just granted.
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -40,24 +41,15 @@ export function PlanSection() {
             Plan: {pro ? "Pro" : "Free"} {pro && <ProBadge />}
           </h2>
           <p className="muted">
-            {pro && plan.expires_at && <>Pro until {formatDate(plan.expires_at)}. </>}
+            {/* A Stripe subscription's dates are shown with the billing controls. */}
+            {pro && plan.expires_at && plan.source !== "stripe" && <>Pro until {formatDate(plan.expires_at)}. </>}
             {pro && !plan.expires_at && <>Pro doesn't expire. </>}
             {lapsed && plan.expires_at && <>Pro ended on {formatDate(plan.expires_at)}. Your data is kept. </>}
             {plan.domains_grace_until && <>Custom domains keep working until {formatDate(plan.domains_grace_until)}.</>}
           </p>
         </div>
-        {!pro && (
-          // Placeholder until billing exists (#15).
-          <a className="btn btn-primary" href="#upgrade" aria-describedby="upgrade-help">
-            Upgrade
-          </a>
-        )}
       </div>
-      {!pro && (
-        <p className="muted small" id="upgrade-help">
-          Paid plans aren't available yet. Pro is granted by hand for now.
-        </p>
-      )}
+      <BillingPanel plan={plan} refreshPlan={refresh} />
       <PlanTable current={plan} pro={plan.pro} />
     </section>
   );

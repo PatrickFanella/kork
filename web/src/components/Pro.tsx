@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
-/** Where "Upgrade" links point until billing exists: the plan section in Settings. */
+/** Where "Upgrade" links point: the plan section in Settings, which holds the billing controls. */
 export const UPGRADE_PATH = "/settings#plan";
 
 export function ProBadge() {
@@ -12,7 +12,7 @@ export function ProBadge() {
   );
 }
 
-/** Explains why a control is disabled and links to the upgrade placeholder. */
+/** Explains why a control is disabled and links to the upgrade options. */
 export function UpgradeNote({ children }: { children: ReactNode }) {
   return (
     <p className="upgrade-note small">

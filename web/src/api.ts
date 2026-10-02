@@ -309,6 +309,38 @@ export interface Plan extends PlanLimits {
   pro: PlanLimits;
 }
 
+/** Billing state from GET /api/billing. Disabled providers only report enabled: false. */
+export interface Billing {
+  stripe: {
+    enabled: boolean;
+    /** Display labels such as "$5"; may be empty. */
+    price_monthly?: string;
+    price_annual?: string;
+    status?: string;
+    interval?: "month" | "year";
+    current_period_end?: string | null;
+    cancel_at_period_end?: boolean;
+    payment_failed?: boolean;
+    /** A live subscription exists; change it in the portal. */
+    subscribed?: boolean;
+    /** A Stripe customer exists, so "Manage billing" works. */
+    can_manage?: boolean;
+  };
+  patreon: {
+    enabled: boolean;
+    connected?: boolean;
+    entitled?: boolean;
+    patron_status?: string;
+    checked_at?: string | null;
+    pro_until?: string | null;
+    grace_until?: string | null;
+    reconnect?: boolean;
+  };
+}
+
+/** Full-page navigation target that redirects to Patreon to connect. */
+export const PATREON_CONNECT_URL = "/api/billing/patreon/connect";
+
 /** A row in the admin user list. */
 export interface AdminUser {
   id: string;
@@ -521,4 +553,13 @@ export const api = {
   adminUsers: (q: string) => request<AdminUser[]>("GET", `/api/admin/users?q=${enc(q)}`),
   setUserPlan: (id: string, plan: PlanTier, expiresAt: string | null) =>
     request<Plan>("POST", `/api/admin/users/${enc(id)}/plan`, { plan, expires_at: expiresAt }),
+
+  // Billing
+  billing: () => request<Billing>("GET", "/api/billing"),
+  checkout: (interval: "month" | "year") =>
+    request<{ url: string }>("POST", "/api/billing/checkout", { interval }),
+  billingPortal: () => request<{ url: string }>("POST", "/api/billing/portal"),
+  patreonCallback: (code: string, state: string) =>
+    request<Billing>("POST", "/api/billing/patreon/callback", { code, state }),
+  patreonDisconnect: () => request<Billing>("DELETE", "/api/billing/patreon"),
 };
