@@ -12,6 +12,7 @@ The Go service serves everything from one origin:
 | `/vcard/{blockId}` | vCard download for a contact block |
 | `/u/{uploadId}` | Uploaded image |
 | `/static/*` | Public page CSS/JS |
+| `/terms`, `/privacy` | Terms of service and privacy policy (server-rendered, main host only) |
 
 On a verified custom domain, `/` renders the attached page.
 
@@ -27,7 +28,7 @@ On a verified custom domain, `/` renders the attached page.
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| POST | `/api/auth/signup` | `{email, password}` | `201 {user}` and session cookie. Password ≥ 10 chars. |
+| POST | `/api/auth/signup` | `{email, password, accept_terms: true}` | `201 {user}` and session cookie. Password ≥ 10 chars. Without `accept_terms: true`: `422`, code `terms_required`, field `accept_terms`. The server records the current terms version (`render.TermsVersion`) and time. |
 | POST | `/api/auth/login` | `{email, password}` | `200 {user}` |
 | POST | `/api/auth/logout` | – | `204` |
 | GET | `/api/auth/me` | – | `200 {user}` or `401` |
@@ -41,6 +42,29 @@ On a verified custom domain, `/` renders the attached page.
 Emails link to `/app/verify?token=...` and `/app/reset?token=...`; the editor reads the query param and calls the endpoint.
 
 Publishing a page requires a verified email (`403 {"error":{"code":"email_unverified"}}`).
+
+## Account
+
+All endpoints need a session except `email/confirm`.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/account` | – | `200 Account` |
+| POST | `/api/account/password` | `{current_password, new_password}` | `204`. Signs out every other session. Wrong current password: `422` code `wrong_password`, field `current_password`. |
+| POST | `/api/account/email` | `{email, password}` | `202 Account` with `pending_email` set. Emails a link to the new address and a notice to the old one. `409 email_taken` if another account uses it. |
+| POST | `/api/account/email/confirm` | `{token}` | `200 {user}`. Switches the email and marks it verified. `400 invalid_token`; `409 email_taken` if the address was taken meanwhile. |
+| GET | `/api/account/export` | – | `200 application/zip` download (see below). 5 per hour per account, then `429`. |
+| DELETE | `/api/account` | `{password}` | `204` and the session cookie is cleared. |
+
+`Account`: `{user, pending_email: string|null, terms_version: string|null, terms_accepted_at: string|null}`. Accounts created before terms existed have `null` terms fields and are not asked to accept.
+
+Password checks on these endpoints are limited to 10 attempts per 15 minutes per account (`429`).
+
+The email-change link is `/app/confirm-email?token=...` and expires after 24 hours. Requesting another change replaces the pending one. Until confirmation the account keeps its old address.
+
+The export ZIP holds `account.json` (`exported_at, email, email_verified, created_at, terms_version, terms_accepted_at, pages: [Page fields + blocks, domains: [{hostname, verified, created_at}], stats: [{block_id, day, count}]], uploads: [{id, content_type, size, file}]`) and each uploaded image at its `file` path (`uploads/<id>.<ext>`). Stats rows with the zero block ID are page views.
+
+Deleting an account removes the user, sessions, tokens, pending email changes, uploads rows and files, pages, blocks, domains, reports about those pages and stats. Its public pages return 404.
 
 ## Catalog
 

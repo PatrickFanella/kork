@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router-do
 import { ApiError, api, errorMessage } from "../api";
 import { useAuth } from "../auth";
 import { Logo } from "../components/Logo";
-import { Notice, Spinner, TextField, useDocumentTitle } from "../components/ui";
+import { FieldError, Notice, Spinner, TextField, useDocumentTitle } from "../components/ui";
 import { PASSWORD_MIN, passwordProblem } from "../lib/validate";
 
 function AuthLayout({ title, subtitle, children, footer }: { title: string; subtitle?: ReactNode; children: ReactNode; footer?: ReactNode }) {
@@ -103,20 +103,22 @@ export function SignupScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [agreed, setAgreed] = useState(false);
   const [touched, setTouched] = useState(false);
   const [fields, setFields] = useState<FieldErrors>({});
   const [general, setGeneral] = useState<string | null>(null);
   const pwProblem = passwordProblem(password);
+  const termsProblem = agreed ? null : "Agree to the Terms and Privacy Policy to create an account.";
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setTouched(true);
-    if (pwProblem) return;
+    if (pwProblem || termsProblem) return;
     setBusy(true);
     setFields({});
     setGeneral(null);
     try {
-      const user = await api.signup(email.trim(), password);
+      const user = await api.signup(email.trim(), password, agreed);
       setUser(user);
       navigate("/", { replace: true });
     } catch (err) {
@@ -150,6 +152,29 @@ export function SignupScreen() {
           hint={`At least ${PASSWORD_MIN} characters.`}
           error={fields.password ?? (touched ? pwProblem : null)}
         />
+        <div className={`field${touched && termsProblem ? " has-error" : ""}`}>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={agreed}
+              onChange={(e) => setAgreed(e.target.checked)}
+              required
+              aria-invalid={touched && termsProblem ? true : undefined}
+              aria-describedby={touched && termsProblem ? "terms-err" : undefined}
+            />
+            <span>
+              I agree to the{" "}
+              <a href="/terms" target="_blank" rel="noopener">
+                Terms
+              </a>{" "}
+              and{" "}
+              <a href="/privacy" target="_blank" rel="noopener">
+                Privacy Policy
+              </a>
+            </span>
+          </label>
+          <FieldError id="terms-err" message={touched ? termsProblem : null} />
+        </div>
         <button type="submit" className="btn btn-primary btn-block" disabled={busy || !email}>
           {busy ? <Spinner label="Creating account" /> : null}
           Create account
