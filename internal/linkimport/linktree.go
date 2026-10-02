@@ -81,9 +81,8 @@ func (Linktree) Parse(page *url.URL, doc *htmlmeta.Doc) (*Profile, bool) {
 		if prof.Title == "" {
 			prof.Title = doc.Title
 		}
-		if prof.Bio == "" {
-			prof.Bio = doc.Description
-		}
+		// The page's meta description is Linktree's own tagline when the
+		// account has no bio, so it is not used as a fallback.
 		if prof.AvatarURL == "" {
 			prof.AvatarURL = doc.Image
 		}
@@ -93,7 +92,11 @@ func (Linktree) Parse(page *url.URL, doc *htmlmeta.Doc) (*Profile, bool) {
 		return nil, false
 	}
 	title := strings.TrimSuffix(strings.TrimSpace(doc.Title), "| Linktree")
-	return &Profile{Title: strings.TrimSpace(title), Bio: doc.Description, AvatarURL: doc.Image,
+	bio := doc.Description
+	if strings.HasPrefix(bio, "Linktree.") {
+		bio = ""
+	}
+	return &Profile{Title: strings.TrimSpace(title), Bio: bio, AvatarURL: doc.Image,
 		Entries: externalAnchors(page, doc, linktreeHosts)}, true
 }
 
