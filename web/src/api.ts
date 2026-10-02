@@ -196,7 +196,7 @@ export interface Upload {
   size: number;
 }
 
-export type ReportReason = "spam" | "scam" | "impersonation" | "illegal" | "other";
+export type ReportReason = "spam" | "scam" | "phishing" | "impersonation" | "illegal" | "other";
 
 export interface Report {
   id: string;
@@ -206,6 +206,16 @@ export interface Report {
   details: string;
   created_at: string;
   resolved: boolean;
+}
+
+/** An account still inside the new-account publish gate. */
+export interface PendingUser {
+  id: string;
+  email: string;
+  email_verified: boolean;
+  created_at: string;
+  publish_unlocks_at: string;
+  pages: string[];
 }
 
 export class ApiError extends Error {
@@ -370,4 +380,6 @@ export const api = {
   resolveReport: (id: string) => request<void>("POST", `/api/admin/reports/${enc(id)}/resolve`),
   suspendPage: (id: string, suspended: boolean) =>
     request<void>("POST", `/api/admin/pages/${enc(id)}/suspend`, { suspended }),
+  pendingUsers: () => request<PendingUser[]>("GET", "/api/admin/users/pending"),
+  trustUser: (id: string) => request<void>("POST", `/api/admin/users/${enc(id)}/trust`),
 };

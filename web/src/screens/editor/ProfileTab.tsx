@@ -82,6 +82,10 @@ function PublishSection({ page, setPage, saved }: EditorProps) {
         >
           We sent a confirmation link to <strong>{user?.email}</strong>. Open it, then try publishing again.
         </Notice>
+      ) : error?.code === "account_too_new" ? (
+        <Notice tone="warning" title="Publishing isn't available yet">
+          {error.message}
+        </Notice>
       ) : error ? (
         <Notice tone="danger">{error.message}</Notice>
       ) : unverified ? (

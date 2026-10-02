@@ -42,6 +42,8 @@ Emails link to `/app/verify?token=...` and `/app/reset?token=...`; the editor re
 
 Publishing a page requires a verified email (`403 {"error":{"code":"email_unverified"}}`).
 
+New accounts also can't publish until they are `ZELDA_PUBLISH_MIN_ACCOUNT_AGE` old (default 24 hours; `0` turns the gate off) or an admin approves them. Until then, publishing returns `403 {"error":{"code":"account_too_new","field":"published","message":"New accounts can publish from <date> UTC. ..."}}`. Admins and accounts created before the gate existed are not affected.
+
 ## Catalog
 
 `GET /api/catalog` (public) drives every editor form:
@@ -137,6 +139,8 @@ Changing `preset` on PATCH without `colors` resets the colors to that preset.
 
 Limit 100 blocks per page. Validation errors return `422` with `field` set to the data key.
 
+When link screening is configured, web destinations are checked on create and update: `link`, `image` and `contact` `url`, `embed` `url`, the profile URL of a `service` block, and a `qr` `value` that is an http(s) URL. A listed destination returns `422 {"error":{"code":"blocked_destination","field":"url" or "value","message":"..."}}`. Publishing a page with a listed destination returns the same code with `field: "published"`. Only the destination URL is sent to the screening provider.
+
 ### Block types and `data`
 
 | type | data | Notes |
@@ -186,5 +190,9 @@ Setup instructions shown to the user: add the TXT record, point the hostname at 
 | POST | `/api/admin/reports/{id}/resolve` | – | `204` |
 | POST | `/api/admin/pages/{id}/suspend` | `{suspended: bool}` | `204` |
 | POST | `/api/admin/users/{id}/suspend` | `{suspended: bool}` | `204` |
+| GET | `/api/admin/users/pending` | – | `200 [{id, email, email_verified, created_at, publish_unlocks_at, pages: [slug]}]`: accounts still inside the publish gate |
+| POST | `/api/admin/users/{id}/trust` | – | `204`; the account can publish now |
 
-`reason`: `spam | scam | impersonation | illegal | other`.
+`reason`: `spam | scam | phishing | impersonation | illegal | other`.
+
+Every 6 hours the server re-screens published pages (200 per pass, least recently checked first). If a page links to a listed destination, it is unpublished, a `phishing` report naming the URL is added to `/api/admin/reports`, and the owner gets an email. The owner can republish after removing the link.
