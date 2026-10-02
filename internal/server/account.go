@@ -198,6 +198,9 @@ type exportPage struct {
 	Blocks  []*store.Block  `json:"blocks"`
 	Domains []*exportDomain `json:"domains"`
 	Stats   []store.StatRow `json:"stats"`
+	// SignupContacts are confirmed addresses on the page's email sign-up
+	// blocks that are kept in Kork.
+	SignupContacts []store.SignupContact `json:"signup_contacts"`
 }
 
 type exportDomain struct {
@@ -276,6 +279,10 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 			ep.Domains = append(ep.Domains, &exportDomain{Hostname: d.Hostname, Verified: d.Verified, CreatedAt: d.CreatedAt})
 		}
 		if ep.Stats, err = s.store.StatRows(ctx, p.ID); err != nil {
+			s.serverErr(w, r, err)
+			return
+		}
+		if ep.SignupContacts, err = s.store.PageSignupContacts(ctx, p.ID); err != nil {
 			s.serverErr(w, r, err)
 			return
 		}

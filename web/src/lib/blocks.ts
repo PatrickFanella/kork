@@ -2,9 +2,19 @@
 // the values before sending them to the API.
 
 import type { BlockData, BlockType, CatalogService, ServiceInput } from "../api";
+import {
+  asEvents,
+  cleanEvents,
+  EVENTS_FIELDS,
+  eventsProblem,
+  LATEST_FIELDS,
+  newBlockSummary,
+  signupFields,
+  type FieldContext,
+} from "./newblocks";
 import { stripPrefix } from "./validate";
 
-export type FieldKind = "text" | "textarea" | "url" | "email" | "tel" | "checkbox" | "image";
+export type FieldKind = "text" | "textarea" | "url" | "email" | "tel" | "checkbox" | "image" | "select" | "password" | "events";
 
 export interface FieldSpec {
   key: string;
@@ -14,6 +24,9 @@ export interface FieldSpec {
   placeholder?: string;
   hint?: string;
   maxLength?: number;
+  /** Choices for "select" fields. */
+  options?: { key: string; name: string }[];
+  inputMode?: "text" | "numeric";
 }
 
 export const BLOCK_ORDER: BlockType[] = [
@@ -27,6 +40,9 @@ export const BLOCK_ORDER: BlockType[] = [
   "contact",
   "map",
   "qr",
+  "email_signup",
+  "events",
+  "latest",
   "divider",
 ];
 
@@ -43,6 +59,9 @@ export const BLOCK_FALLBACK: Record<BlockType, { name: string; description: stri
   copy: { name: "Copy button", description: "A button that copies text, like a code or address." },
   contact: { name: "Contact card", description: "A 'Save contact' button that downloads a vCard." },
   map: { name: "Map", description: "Opens an address in the visitor's maps app." },
+  email_signup: { name: "Email sign-up", description: "Collect confirmed email addresses for your newsletter." },
+  events: { name: "Events", description: "Tour dates and shows with ticket links. Past dates hide themselves." },
+  latest: { name: "Latest video or post", description: "The newest upload from a YouTube channel or RSS feed." },
 };
 
 const SHOW_QR: FieldSpec = {
@@ -51,8 +70,14 @@ const SHOW_QR: FieldSpec = {
   kind: "checkbox",
 };
 
-export function blockFields(type: BlockType, service?: CatalogService): FieldSpec[] {
+export function blockFields(type: BlockType, service?: CatalogService, ctx?: FieldContext): FieldSpec[] {
   switch (type) {
+    case "email_signup":
+      return signupFields(ctx);
+    case "events":
+      return EVENTS_FIELDS;
+    case "latest":
+      return LATEST_FIELDS;
     case "link":
       return [
         { key: "title", label: "Button text", kind: "text", required: true, maxLength: 120, placeholder: "My latest project" },
@@ -153,6 +178,13 @@ export function cleanBlockData(
 ): BlockData {
   const out: BlockData = {};
   for (const [key, raw] of Object.entries(data)) {
+    if (type === "events" && key === "events") {
+      out.events = cleanEvents(asEvents(raw));
+      continue;
+    }
+    if (type === "email_signup" && (key === "brevo_key_set" || (data.destination !== "brevo" && key.startsWith("brevo_")))) {
+      continue; // the server sets brevo_key_set; Brevo settings only apply to Brevo lists
+    }
     if (typeof raw === "boolean") {
       if (raw) out[key] = true;
       continue;
@@ -174,6 +206,11 @@ export function missingRequired(fields: FieldSpec[], data: BlockData): Record<st
   for (const f of fields) {
     if (!f.required) continue;
     const v = data[f.key];
+    if (f.kind === "events") {
+      const problem = eventsProblem(asEvents(v));
+      if (problem) errors[f.key] = problem;
+      continue;
+    }
     if (v === undefined || v === false || (typeof v === "string" && v.trim() === "")) {
       errors[f.key] = f.kind === "image" ? "Upload an image." : "This field is required.";
     }
@@ -184,6 +221,8 @@ export function missingRequired(fields: FieldSpec[], data: BlockData): Record<st
 /** One-line secondary text for the block list (service blocks: the prefixed value). */
 export function blockSummary(type: BlockType, data: BlockData, service?: CatalogService): string {
   const s = (k: string) => (typeof data[k] === "string" ? (data[k] as string) : "");
+  const extra = newBlockSummary(type, data);
+  if (extra !== null) return extra;
   switch (type) {
     case "service": {
       const value = s("value");

@@ -59,6 +59,40 @@
     <li class="item item-embed">{{template "badge" (index $.Badges .ID)}}<iframe src="{{.EmbedSrc}}" title="{{.EmbedTitle}}" loading="lazy" {{if .EmbedHeight}}height="{{.EmbedHeight}}" class="fixed"{{else}}class="video"{{end}} allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"></iframe></li>
     {{- else if eq .Kind "qr"}}
     <li class="item item-qr">{{template "badge" (index $.Badges .ID)}}<figure><div class="qr">{{.QR}}</div>{{if .Title}}<figcaption>{{.Title}}</figcaption>{{end}}</figure></li>
+    {{- else if eq .Kind "signup"}}
+    <li class="item item-signup">{{template "badge" (index $.Badges .ID)}}
+      <form class="signup" data-signup="{{.ID}}" novalidate>
+        <h2 id="signup-{{.ID}}-title">{{.Title}}</h2>
+        {{if .Subtitle}}<p class="signup-desc">{{.Subtitle}}</p>{{end}}
+        <div class="signup-row">
+          <label class="sr-only" for="signup-{{.ID}}-email">Email address</label>
+          <input id="signup-{{.ID}}-email" type="email" name="email" required maxlength="254" autocomplete="email" placeholder="you@example.com" aria-describedby="signup-{{.ID}}-status">
+          <button class="btn" type="submit">{{.Button}}</button>
+        </div>
+        <div class="signup-hp" aria-hidden="true"><label>Leave this empty <input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
+        <p class="signup-note">We'll email you a link to confirm. <a href="{{$.BaseURL}}/privacy">Privacy</a></p>
+        <p class="signup-status" id="signup-{{.ID}}-status" role="status" aria-live="polite"></p>
+      </form>
+    </li>
+    {{- else if eq .Kind "events"}}
+    <li class="item item-events">{{template "badge" (index $.Badges .ID)}}{{$block := .ID}}
+      <ul class="events">
+      {{- range .Events}}
+        <li class="event{{if .SoldOut}} sold-out{{end}}">
+          <time class="event-date" datetime="{{.Datetime}}"><span class="event-month">{{.Month}}</span><span class="event-day">{{.Day}}</span></time>
+          <span class="event-text"><strong>{{.Title}}</strong><small>{{.Weekday}}{{if .Time}} · {{.Time}}{{end}}{{if .City}} · {{.City}}{{end}}</small></span>
+          {{if .SoldOut}}<span class="event-action event-soldout">Sold out</span>{{else if .Href}}<a class="event-action" href="{{.Href}}" target="_blank" rel="noopener" data-track="{{$block}}">Tickets<span class="sr-only"> for {{.Title}}</span></a>{{end}}
+        </li>
+      {{- end}}
+      </ul>
+    </li>
+    {{- else if eq .Kind "latest"}}
+    <li class="item item-latest">{{template "badge" (index $.Badges .ID)}}
+      <a class="latest" href="{{.Href}}" target="_blank" rel="noopener"{{if .Track}} data-track="{{.ID}}"{{end}}>
+        {{if .Image}}<img class="latest-thumb" src="{{.Image}}" alt="" loading="lazy">{{end}}
+        <span class="latest-text"><small>{{.Subtitle}}{{if .Date}} · <time datetime="{{.Datetime}}">{{.Date}}</time>{{end}}</small><strong>{{.Title}}</strong></span>
+      </a>
+    </li>
     {{- end}}
   {{- end}}
   </ol>

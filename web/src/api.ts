@@ -65,6 +65,8 @@ export interface CatalogTheme {
 
 export interface CatalogFeatures {
   custom_domains: boolean;
+  /** Email sign-up blocks can send addresses to Brevo (needs ZELDA_SECRET_KEY). */
+  brevo_signup?: boolean;
 }
 
 export interface Catalog {
@@ -127,10 +129,31 @@ export type BlockType =
   | "qr"
   | "copy"
   | "contact"
-  | "map";
+  | "map"
+  | "email_signup"
+  | "events"
+  | "latest";
 
-/** Block data is a flat object of string/boolean values keyed per block type. */
-export type BlockData = Record<string, string | boolean | undefined>;
+/** One date in an events block. */
+export interface EventItem {
+  /** YYYY-MM-DD */
+  date: string;
+  /** HH:MM, 24-hour */
+  time?: string;
+  title: string;
+  city?: string;
+  ticket_url?: string;
+  sold_out?: boolean;
+}
+
+export type BlockValue = string | number | boolean | EventItem[] | undefined;
+
+/**
+ * Block data keyed per block type: mostly flat strings and booleans. Events
+ * blocks hold `events: EventItem[]`. Email sign-up blocks accept a
+ * write-only `brevo_api_key`; responses only say `brevo_key_set: true`.
+ */
+export type BlockData = Record<string, BlockValue>;
 
 export interface Block {
   id: string;
@@ -231,6 +254,22 @@ export interface Stats {
   referrers?: NameCount[];
   /** Top 20 ISO country codes, or "unknown". */
   countries?: NameCount[];
+}
+
+/** A confirmed address on an email sign-up block's list. */
+export interface SignupContact {
+  id: string;
+  block_id: string;
+  email: string;
+  confirmed_at: string;
+}
+
+export interface SignupContacts {
+  contacts: SignupContact[];
+  /** Addresses that haven't opened their confirmation link yet. */
+  pending: number;
+  /** Confirmed addresses Brevo hasn't accepted yet; retried automatically. */
+  awaiting_push: number;
 }
 
 export interface AccountSettings {
@@ -511,6 +550,15 @@ export const api = {
     request<void>("DELETE", `/api/pages/${enc(pageId)}/blocks/${enc(blockId)}`),
   reorderBlocks: (pageId: string, ids: string[]) =>
     request<void>("PUT", `/api/pages/${enc(pageId)}/blocks/order`, { ids }),
+
+  // Email sign-up lists
+  signupContacts: (pageId: string, blockId: string) =>
+    request<SignupContacts>("GET", `/api/pages/${enc(pageId)}/blocks/${enc(blockId)}/contacts`),
+  deleteSignupContact: (pageId: string, blockId: string, contactId: string) =>
+    request<void>("DELETE", `/api/pages/${enc(pageId)}/blocks/${enc(blockId)}/contacts/${enc(contactId)}`),
+  /** Same-origin CSV download of the confirmed list. */
+  signupContactsCsvUrl: (pageId: string, blockId: string) =>
+    `/api/pages/${enc(pageId)}/blocks/${enc(blockId)}/contacts.csv`,
 
   // Domains
   addDomain: (pageId: string, hostname: string) =>

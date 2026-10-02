@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -71,7 +72,7 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 		"button_shapes":   catalog.ButtonShapes,
 		"layouts":         catalog.Layouts,
 		"embed_providers": catalog.EmbedProviders,
-		"features":        map[string]bool{"custom_domains": s.cfg.CustomDomains},
+		"features":        map[string]bool{"custom_domains": s.cfg.CustomDomains, "brevo_signup": s.x.sealer != nil},
 		"domain_mode":     s.domains.Mode(),
 		"domain_target":   s.cfg.DomainTarget,
 	})
@@ -432,7 +433,12 @@ func (s *Server) handleCreateBlock(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnprocessableEntity, "invalid", "unknown block type", "type")
 		return
 	}
-	data, err := blocks.Validate(body.Type, body.Data, s.uploadChecker(r))
+	raw, secrets, err := blocks.TakeSecrets(body.Type, body.Data)
+	if err != nil {
+		s.writeBlockErr(w, err)
+		return
+	}
+	data, err := blocks.Validate(body.Type, raw, s.uploadChecker(r))
 	if err != nil {
 		s.writeBlockErr(w, err)
 		return
@@ -447,6 +453,10 @@ func (s *Server) handleCreateBlock(w http.ResponseWriter, r *http.Request) {
 	if !body.applyTo(w, &sched) {
 		return
 	}
+	data, after, ok := s.prepareExtras(w, r, nil, body.Type, data, secrets)
+	if !ok {
+		return
+	}
 	enabled := body.Enabled == nil || *body.Enabled
 	b, err := s.store.CreateBlock(r.Context(), p.ID, body.Type, data, enabled, sched)
 	if errors.Is(err, store.ErrLimit) {
@@ -456,6 +466,13 @@ func (s *Server) handleCreateBlock(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.serverErr(w, r, err)
 		return
+	}
+	if after != nil {
+		if err := after(r.Context(), b); err != nil {
+			_ = s.store.DeleteBlock(r.Context(), p.ID, b.ID)
+			s.serverErr(w, r, err)
+			return
+		}
 	}
 	b.Label = blocks.Label(b.Type, b.Data)
 	writeJSON(w, http.StatusCreated, b)
@@ -493,13 +510,23 @@ func (s *Server) handleUpdateBlock(w http.ResponseWriter, r *http.Request) {
 	if !body.applyTo(w, &b.Schedule) {
 		return
 	}
+	var after func(context.Context, *store.Block) error
 	if len(body.Data) > 0 {
-		data, err := blocks.Validate(b.Type, body.Data, s.uploadChecker(r))
+		raw, secrets, err := blocks.TakeSecrets(b.Type, body.Data)
+		if err != nil {
+			s.writeBlockErr(w, err)
+			return
+		}
+		data, err := blocks.Validate(b.Type, raw, s.uploadChecker(r))
 		if err != nil {
 			s.writeBlockErr(w, err)
 			return
 		}
 		if s.rejectBlocked(w, r, b.Type, data) {
+			return
+		}
+		var ok bool
+		if data, after, ok = s.prepareExtras(w, r, b, b.Type, data, secrets); !ok {
 			return
 		}
 		b.Data = data
@@ -510,6 +537,12 @@ func (s *Server) handleUpdateBlock(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.UpdateBlock(r.Context(), b); err != nil {
 		s.serverErr(w, r, err)
 		return
+	}
+	if after != nil {
+		if err := after(r.Context(), b); err != nil {
+			s.serverErr(w, r, err)
+			return
+		}
 	}
 	b.Label = blocks.Label(b.Type, b.Data)
 	writeJSON(w, http.StatusOK, b)
@@ -525,6 +558,7 @@ func (s *Server) handleDeleteBlock(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "not_found", "block not found", "")
 		return
 	}
+	cleanup := s.blockDeleteCleanup(r.Context(), id)
 	if err := s.store.DeleteBlock(r.Context(), p.ID, id); errors.Is(err, store.ErrNotFound) {
 		writeErr(w, http.StatusNotFound, "not_found", "block not found", "")
 		return
@@ -532,6 +566,7 @@ func (s *Server) handleDeleteBlock(w http.ResponseWriter, r *http.Request) {
 		s.serverErr(w, r, err)
 		return
 	}
+	cleanup()
 	w.WriteHeader(http.StatusNoContent)
 }
 

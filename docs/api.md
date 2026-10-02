@@ -11,6 +11,8 @@ The Go service serves everything from one origin:
 | `POST /t/{blockId}` | Click beacon sent by the public page script (links stay direct so `rel="me"` verification works) |
 | `/vcard/{blockId}` | vCard download for a contact block |
 | `/unsubscribe/weekly-stats?token=...` | Signed one-click unsubscribe from the weekly stats email (GET or POST) |
+| `/subscribe/confirm?token=...` | Email sign-up confirmation: GET shows a button, POST (form field `token`) confirms. Main host only |
+| `POST /api/subscribe/{blockId}` | Public email sign-up submission (see "Email sign-up"); also served on custom domains |
 | `/u/{uploadId}` | Uploaded image |
 | `/static/*` | Public page CSS/JS |
 | `/terms`, `/privacy` | Terms of service and privacy policy (server-rendered, main host only) |
@@ -65,9 +67,11 @@ Password checks on these endpoints are limited to 10 attempts per 15 minutes per
 
 The email-change link is `/app/confirm-email?token=...` and expires after 24 hours. Requesting another change replaces the pending one. Until confirmation the account keeps its old address.
 
-The export ZIP holds `account.json` (`exported_at, email, email_verified, created_at, terms_version, terms_accepted_at, pages: [Page fields + blocks, domains: [{hostname, verified, created_at}], stats: [{block_id, day, count}]], uploads: [{id, content_type, size, file}]`) and each uploaded image at its `file` path (`uploads/<id>.<ext>`). Stats rows with the zero block ID are page views.
+The export ZIP holds `account.json` (`exported_at, email, email_verified, created_at, terms_version, terms_accepted_at, pages: [Page fields + blocks, domains: [{hostname, verified, created_at}], stats: [{block_id, day, count}], signup_contacts: [{id, block_id, email, confirmed_at}]], uploads: [{id, content_type, size, file}]`) and each uploaded image at its `file` path (`uploads/<id>.<ext>`). Stats rows with the zero block ID are page views.
 
-Deleting an account removes the user, sessions, tokens, pending email changes, uploads rows and files, pages, blocks, domains, reports about those pages and stats. Its public pages return 404.
+`signup_contacts` lists confirmed addresses kept in Kork by the page's email sign-up blocks. Brevo API keys are never exported.
+
+Deleting an account removes the user, sessions, tokens, pending email changes, uploads rows and files, pages, blocks, domains, reports about those pages, stats, and sign-up addresses and Brevo keys. Its public pages return 404.
 
 ## Catalog
 
@@ -203,7 +207,7 @@ Each email links to `GET /unsubscribe/weekly-stats?token=...`, which turns the e
 
 Limit 100 blocks per page. Validation errors return `422` with `field` set to the data key.
 
-When link screening is configured, web destinations are checked on create and update: `link`, `image` and `contact` `url`, `embed` `url`, the profile URL of a `service` block, and a `qr` `value` that is an http(s) URL. A listed destination returns `422 {"error":{"code":"blocked_destination","field":"url" or "value","message":"..."}}`. Publishing a page with a listed destination returns the same code with `field: "published"`. Only the destination URL is sent to the screening provider.
+When link screening is configured, web destinations are checked on create and update: `link`, `image` and `contact` `url`, `embed` `url`, the profile URL of a `service` block, a `qr` `value` that is an http(s) URL, each `events` `ticket_url` (reported with `field: "events"`) and a `latest` feed URL (`field: "source"`). A listed destination returns `422 {"error":{"code":"blocked_destination","field":"url" or "value","message":"..."}}`. Publishing a page with a listed destination returns the same code with `field: "published"`. Only the destination URL is sent to the screening provider.
 
 ### Schedules
 
@@ -229,6 +233,73 @@ When link screening is configured, web destinations are checked on create and up
 | `copy` | `{label, value}` | Copy-to-clipboard button |
 | `contact` | `{name, phone?, email?, org?, url?, note?}` | "Save contact" button downloading a vCard |
 | `map` | `{address, label?}` | Opens the address in a maps app |
+| `email_signup` | `{title, description?, button_label?, destination, brevo_list_id?, brevo_api_key?}` | Email form with double opt-in. See "Email sign-up" |
+| `events` | `{events: [{date, time?, title, city?, ticket_url?, sold_out?}]}` | 1–50 dates. See "Events" |
+| `latest` | `{source, label?}` | Newest item of a YouTube channel or RSS/Atom feed. See "Latest video or post" |
+
+### Email sign-up
+
+`data`: `title` (≤ 80), `description` (≤ 200), `button_label` (≤ 30, default "Subscribe"), `destination` `"kork"` (default) or `"brevo"`, and for Brevo `brevo_list_id` (a number or a string of digits).
+
+`brevo_api_key` is write-only. The server checks the key and list with Brevo (`GET /v3/contacts/lists/{id}`), seals the key with AES-256-GCM under `ZELDA_SECRET_KEY` and stores it outside the block data. Responses never contain it; they include `brevo_key_set: true` instead. On PATCH, omit the key to keep the saved one. Switching to `"kork"` deletes the key. Errors:
+
+- `422` `field: "destination"`, code `unavailable`: the server has no `ZELDA_SECRET_KEY`. `GET /api/catalog` reports `features.brevo_signup`.
+- `422` `field: "brevo_api_key"`: missing key (code `invalid`), rejected by Brevo (`brevo_key`), or Brevo unreachable (`brevo_unavailable`).
+- `422` `field: "brevo_list_id"`: missing, or no such list in that Brevo account (`brevo_list`).
+
+Key and list checks share the link-preview limit (60 per user per hour).
+
+Public submission, on the main host and on verified custom domains:
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | `/api/subscribe/{blockId}` | `{email, website}` | `202 {"message": "Check your inbox for a link to confirm your subscription."}` |
+
+- Needs `X-Requested-With: zelda`. 10 submissions per IP per hour (`429`).
+- `website` is a honeypot the page hides from people. When it is filled in, the response is `202` and nothing is stored or sent.
+- `422 field: "email"` for an invalid address; `404` when the block isn't visible on a live page.
+- The response is the same whether the address is new, waiting for confirmation or already on the list. Already-listed addresses get no email. Each address gets at most 3 confirmation emails per block per hour; past that the response is still `202`.
+- `429 list_full` when a block has 1,000 unconfirmed or 50,000 total addresses. `503 unavailable` if a Brevo block has lost its key.
+
+The confirmation email links to `/subscribe/confirm?token=...` on the main host. Opening it shows a button; the address is confirmed only by the POST, so mail scanners that fetch links don't confirm it. Links expire after 48 hours, and unconfirmed addresses are deleted then.
+
+After confirmation:
+
+- `kork`: the address joins the block's list.
+- `brevo`: the address is sent to Brevo (`POST /v3/contacts` with `listIds` and `updateEnabled: true`) and deleted from Kork. If Brevo fails, the address is kept and retried every 15 minutes for up to 7 days, then deleted.
+
+The creator's list:
+
+| Method | Path | Response |
+|---|---|---|
+| GET | `/api/pages/{id}/blocks/{blockId}/contacts` | `200 {contacts: [{id, block_id, email, confirmed_at}], pending, awaiting_push}`, newest first. `pending` counts unconfirmed addresses, `awaiting_push` confirmed addresses waiting for Brevo. |
+| GET | `/api/pages/{id}/blocks/{blockId}/contacts.csv` | `200 text/csv` with `email,confirmed_at`. Values starting with `= + - @` are prefixed with `'`. |
+| DELETE | `/api/pages/{id}/blocks/{blockId}/contacts/{contactId}` | `204` |
+
+Deleting the block deletes its addresses.
+
+### Events
+
+Each event: `date` `YYYY-MM-DD` (years 2000–2100), optional `time` `HH:MM` 24-hour, `title` (title or venue, ≤ 100), `city` (≤ 80), `ticket_url` (http or https only), `sold_out`. The server sorts events by date and time on save. Validation errors use `field: "events"` with a message naming the event, such as `Event 2: enter the date as YYYY-MM-DD`.
+
+Dates carry no time zone, so an event stays on the public page until its date has ended everywhere: 12:00 UTC the day after. A block whose events are all past isn't rendered. Ticket link clicks count as clicks on the block.
+
+### Latest video or post
+
+`source` is one of:
+
+- a YouTube handle (`@name`, `youtube.com/@name`), stored as `https://www.youtube.com/@name`;
+- a channel address (`youtube.com/channel/UC…`, or the channel's `feeds/videos.xml?channel_id=` URL), stored as `https://www.youtube.com/channel/UC…`;
+- a legacy `youtube.com/user/name` address;
+- any other http(s) URL, treated as an RSS or Atom feed.
+
+Other YouTube addresses (`/c/…`, video links) are rejected. `label` (≤ 60) replaces the small "Latest video"/"Latest post" heading.
+
+On create, and on update when `source` changes, the server fetches the feed through `internal/fetch` (same address rules and limits as link previews) and returns `422 field: "source"` (code `feed_failed`) if it can't be read or has no items. These checks share the link-preview limit.
+
+Handles are resolved by fetching the channel page and reading its channel ID; the mapping is cached for 30 days. Feeds are read from `https://www.youtube.com/feeds/videos.xml?channel_id=…`.
+
+The newest item (by date, else the first) is cached per block in Postgres with its title, link, date and thumbnail. The thumbnail is downloaded once per image URL and stored as an upload owned by the page owner, with the same type checks as `/api/uploads`, so pages keep `img-src 'self'`. When a cached item exists, rendering never waits for the network: after an hour (10 minutes after a failed fetch) the page serves the cached item and refreshes in the background. A block with nothing cached waits up to 1 second for its first fetch and is left out if that doesn't finish. A failed refresh keeps the last good item. Replacing an item's thumbnail or deleting the block deletes the old thumbnail upload.
 
 ## Domains
 

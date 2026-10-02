@@ -119,6 +119,16 @@ type Simple struct {
 	Landing      bool
 	ServiceCount int
 	AssetVersion string
+	// Form, when set, replaces the home link with a one-button POST form.
+	Form *SimpleForm
+}
+
+// SimpleForm posts a token back to the server, such as a sign-up
+// confirmation.
+type SimpleForm struct {
+	Action string
+	Token  string
+	Button string
 }
 
 // WriteSimple renders the landing page or an error page.

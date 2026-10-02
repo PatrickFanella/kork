@@ -18,6 +18,9 @@ var BlockTypes = []BlockType{
 	{"copy", "Copy button", "A value visitors can copy, like a username or address"},
 	{"contact", "Contact card", "A Save contact button that downloads a vCard"},
 	{"map", "Location", "Opens an address in maps"},
+	{"email_signup", "Email sign-up", "Collect confirmed email addresses, kept here or sent to your Brevo list"},
+	{"events", "Events", "Tour dates and shows with ticket links; past dates hide themselves"},
+	{"latest", "Latest video or post", "The newest upload from a YouTube channel or any RSS/Atom feed"},
 	{"divider", "Divider", "A horizontal rule"},
 }
 

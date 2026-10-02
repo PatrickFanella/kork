@@ -1,8 +1,10 @@
 import { Fragment, useState, type FormEvent } from "react";
-import { ApiError, errorMessage, type BlockData, type BlockType, type CatalogService } from "../../api";
+import { ApiError, errorMessage, type BlockData, type BlockType, type BlockValue, type CatalogService } from "../../api";
 import { useCatalog } from "../../catalog";
-import { ImageField, Notice, Spinner, TextField, uploadUrl } from "../../components/ui";
+import { ImageField, Notice, SelectField, Spinner, TextField, uploadUrl } from "../../components/ui";
 import { blockFields, cleanBlockData, missingRequired, type FieldSpec } from "../../lib/blocks";
+import { asEvents } from "../../lib/newblocks";
+import { EventsField } from "./EventsField";
 import { LinkPreviewHelper } from "./LinkPreviewHelper";
 import { scheduleError, type BlockSchedule } from "../../lib/schedule";
 import { ScheduleFields } from "./ScheduleFields";
@@ -30,15 +32,18 @@ export function BlockForm({
   onChangeService,
 }: BlockFormProps) {
   const catalog = useCatalog();
-  const fields = blockFields(type, service);
   const [data, setData] = useState<BlockData>(() => {
     const d: BlockData = { ...initial };
+    if (type === "email_signup" && !d.destination) d.destination = "kork";
+    if (type === "events" && !Array.isArray(d.events)) d.events = [{ date: "", title: "" }];
     if (type === "service" && service?.input === "handle" && typeof d.value === "string") {
       // Values are stored without the prefix; the prefix is shown as an adornment.
       d.value = d.value.startsWith(service.prefix) && service.prefix ? d.value.slice(service.prefix.length) : d.value;
     }
     return d;
   });
+  // Some fields depend on others (the Brevo settings), so derive them from the data.
+  const fields = blockFields(type, service, { brevo: catalog.features?.brevo_signup, data });
   const [schedule, setSchedule] = useState<BlockSchedule>(() => ({
     starts_at: initialSchedule?.starts_at ?? null,
     ends_at: initialSchedule?.ends_at ?? null,
@@ -47,7 +52,7 @@ export function BlockForm({
   const [general, setGeneral] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const set = (key: string, value: string | boolean | undefined) => {
+  const set = (key: string, value: BlockValue) => {
     setData((d) => ({ ...d, [key]: value }));
     if (errors[key]) setErrors((e) => ({ ...e, [key]: "" }));
   };
@@ -144,7 +149,7 @@ export function BlockForm({
   );
 }
 
-const str = (v: string | boolean | undefined) => (typeof v === "string" ? v : "");
+const str = (v: BlockValue) => (typeof v === "string" ? v : "");
 
 function focusFirstError(form: HTMLFormElement) {
   window.requestAnimationFrame(() => {
@@ -162,12 +167,24 @@ function FieldInput({
   onChange,
 }: {
   spec: FieldSpec;
-  value: string | boolean | undefined;
+  value: BlockValue;
   error?: string;
   prefix?: string;
   hint?: string;
-  onChange: (value: string | boolean | undefined) => void;
+  onChange: (value: BlockValue) => void;
 }) {
+  if (spec.kind === "events") {
+    return <EventsField label={spec.label} value={asEvents(value)} error={error} onChange={onChange} />;
+  }
+  if (spec.kind === "select") {
+    return (
+      <div className={error ? "has-error" : undefined}>
+        <SelectField label={spec.label} value={typeof value === "string" ? value : ""} options={spec.options ?? []} onChange={onChange} />
+        {hint && <p className="field-hint">{hint}</p>}
+        {error && <p className="field-error">{error}</p>}
+      </div>
+    );
+  }
   if (spec.kind === "checkbox") {
     return (
       <div className="field">
@@ -192,15 +209,26 @@ function FieldInput({
       />
     );
   }
-  const str = typeof value === "string" ? value : "";
-  const typeMap = { text: "text", textarea: "text", url: "url", email: "email", tel: "tel" } as const;
+  const str = typeof value === "string" ? value : typeof value === "number" ? String(value) : "";
+  const typeMap = { text: "text", textarea: "text", url: "url", email: "email", tel: "tel", password: "password" } as const;
+  const inputMode =
+    spec.inputMode === "numeric"
+      ? "numeric"
+      : spec.kind === "url"
+        ? "url"
+        : spec.kind === "email"
+          ? "email"
+          : spec.kind === "tel"
+            ? "tel"
+            : undefined;
   return (
     <TextField
       label={spec.label}
       value={str}
       onChange={onChange}
       type={typeMap[spec.kind]}
-      inputMode={spec.kind === "url" ? "url" : spec.kind === "email" ? "email" : spec.kind === "tel" ? "tel" : undefined}
+      inputMode={inputMode}
+      autoComplete={spec.kind === "password" ? "off" : undefined}
       multiline={spec.kind === "textarea"}
       required={spec.required}
       placeholder={spec.placeholder}

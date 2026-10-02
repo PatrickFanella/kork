@@ -47,6 +47,18 @@ func Destinations(typ string, raw json.RawMessage) []Destination {
 		var b QR
 		_ = json.Unmarshal(raw, &b)
 		add("value", b.Value)
+	case "events":
+		var b Events
+		_ = json.Unmarshal(raw, &b)
+		for _, e := range b.Events {
+			add("events", e.TicketURL)
+		}
+	case "latest":
+		var b Latest
+		_ = json.Unmarshal(raw, &b)
+		if kind, _ := SourceKind(b.Source); kind == SourceFeed {
+			add("source", b.Source)
+		}
 	case "service":
 		var b Service
 		_ = json.Unmarshal(raw, &b)
