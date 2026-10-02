@@ -86,7 +86,7 @@ func TestImportAndLinkPreview(t *testing.T) {
 	}
 
 	alice := e.client()
-	if code := alice.do("POST", "/api/auth/signup", map[string]string{"email": "alice@example.com", "password": "correct horse battery"}, nil); code != 201 {
+	if code := alice.do("POST", "/api/auth/signup", map[string]any{"email": "alice@example.com", "password": "correct horse battery", "accept_terms": true}, nil); code != 201 {
 		t.Fatalf("signup: %d", code)
 	}
 	var page pageResp

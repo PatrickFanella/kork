@@ -10,24 +10,29 @@ import (
 	"unicode/utf8"
 
 	"git.subcult.tv/subculture-collective/zelda/internal/mail"
+	"git.subcult.tv/subculture-collective/zelda/internal/render"
 	"git.subcult.tv/subculture-collective/zelda/internal/store"
 )
 
 var emailRe = regexp.MustCompile(`^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]{2,}$`)
 
 type credentials struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email       string `json:"email"`
+	Password    string `json:"password"`
+	AcceptTerms bool   `json:"accept_terms"` // signup only
 }
 
-func validPassword(w http.ResponseWriter, pw string) bool {
+func validPassword(w http.ResponseWriter, pw string) bool { return validPasswordFor(w, pw, "password") }
+
+// validPasswordFor checks a new password and reports problems against field.
+func validPasswordFor(w http.ResponseWriter, pw, field string) bool {
 	n := utf8.RuneCountInString(pw)
 	if n < 10 {
-		writeErr(w, http.StatusUnprocessableEntity, "weak_password", "use at least 10 characters", "password")
+		writeErr(w, http.StatusUnprocessableEntity, "weak_password", "use at least 10 characters", field)
 		return false
 	}
 	if len(pw) > 256 {
-		writeErr(w, http.StatusUnprocessableEntity, "invalid", "password is too long", "password")
+		writeErr(w, http.StatusUnprocessableEntity, "invalid", "password is too long", field)
 		return false
 	}
 	return true
@@ -62,12 +67,16 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 	if !validPassword(w, c.Password) {
 		return
 	}
+	if !c.AcceptTerms {
+		writeErr(w, http.StatusUnprocessableEntity, "terms_required", "agree to the Terms and Privacy Policy to continue", "accept_terms")
+		return
+	}
 	hash, err := hashPassword(c.Password)
 	if err != nil {
 		s.serverErr(w, r, err)
 		return
 	}
-	u, err := s.store.CreateUser(r.Context(), c.Email, hash)
+	u, err := s.store.CreateUserAccepting(r.Context(), c.Email, hash, render.TermsVersion)
 	if errors.Is(err, store.ErrConflict) {
 		writeErr(w, http.StatusConflict, "email_taken", "an account with that email already exists", "email")
 		return

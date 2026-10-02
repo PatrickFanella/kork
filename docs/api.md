@@ -10,8 +10,10 @@ The Go service serves everything from one origin:
 | `/{slug}` | Published public page |
 | `POST /t/{blockId}` | Click beacon sent by the public page script (links stay direct so `rel="me"` verification works) |
 | `/vcard/{blockId}` | vCard download for a contact block |
+| `/unsubscribe/weekly-stats?token=...` | Signed one-click unsubscribe from the weekly stats email (GET or POST) |
 | `/u/{uploadId}` | Uploaded image |
 | `/static/*` | Public page CSS/JS |
+| `/terms`, `/privacy` | Terms of service and privacy policy (server-rendered, main host only) |
 
 On a verified custom domain, `/` renders the attached page.
 
@@ -27,7 +29,7 @@ On a verified custom domain, `/` renders the attached page.
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| POST | `/api/auth/signup` | `{email, password}` | `201 {user}` and session cookie. Password ≥ 10 chars. |
+| POST | `/api/auth/signup` | `{email, password, accept_terms: true}` | `201 {user}` and session cookie. Password ≥ 10 chars. Without `accept_terms: true`: `422`, code `terms_required`, field `accept_terms`. The server records the current terms version (`render.TermsVersion`) and time. |
 | POST | `/api/auth/login` | `{email, password}` | `200 {user}` |
 | POST | `/api/auth/logout` | – | `204` |
 | GET | `/api/auth/me` | – | `200 {user}` or `401` |
@@ -41,6 +43,31 @@ On a verified custom domain, `/` renders the attached page.
 Emails link to `/app/verify?token=...` and `/app/reset?token=...`; the editor reads the query param and calls the endpoint.
 
 Publishing a page requires a verified email (`403 {"error":{"code":"email_unverified"}}`).
+
+New accounts also can't publish until they are `ZELDA_PUBLISH_MIN_ACCOUNT_AGE` old (default 24 hours; `0` turns the gate off) or an admin approves them. Until then, publishing returns `403 {"error":{"code":"account_too_new","field":"published","message":"New accounts can publish from <date> UTC. ..."}}`. Admins and accounts created before the gate existed are not affected.
+
+## Account
+
+All endpoints need a session except `email/confirm`.
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/account` | – | `200 Account` |
+| POST | `/api/account/password` | `{current_password, new_password}` | `204`. Signs out every other session. Wrong current password: `422` code `wrong_password`, field `current_password`. |
+| POST | `/api/account/email` | `{email, password}` | `202 Account` with `pending_email` set. Emails a link to the new address and a notice to the old one. `409 email_taken` if another account uses it. |
+| POST | `/api/account/email/confirm` | `{token}` | `200 {user}`. Switches the email and marks it verified. `400 invalid_token`; `409 email_taken` if the address was taken meanwhile. |
+| GET | `/api/account/export` | – | `200 application/zip` download (see below). 5 per hour per account, then `429`. |
+| DELETE | `/api/account` | `{password}` | `204` and the session cookie is cleared. |
+
+`Account`: `{user, pending_email: string|null, terms_version: string|null, terms_accepted_at: string|null}`. Accounts created before terms existed have `null` terms fields and are not asked to accept.
+
+Password checks on these endpoints are limited to 10 attempts per 15 minutes per account (`429`).
+
+The email-change link is `/app/confirm-email?token=...` and expires after 24 hours. Requesting another change replaces the pending one. Until confirmation the account keeps its old address.
+
+The export ZIP holds `account.json` (`exported_at, email, email_verified, created_at, terms_version, terms_accepted_at, pages: [Page fields + blocks, domains: [{hostname, verified, created_at}], stats: [{block_id, day, count}]], uploads: [{id, content_type, size, file}]`) and each uploaded image at its `file` path (`uploads/<id>.<ext>`). Stats rows with the zero block ID are page views.
+
+Deleting an account removes the user, sessions, tokens, pending email changes, uploads rows and files, pages, blocks, domains, reports about those pages and stats. Its public pages return 404.
 
 ## Catalog
 
@@ -84,7 +111,7 @@ Categories: `social, video, music, creator, payment, crypto, contact, web`.
 | DELETE | `/api/pages/{id}` | – | `204` |
 | GET | `/api/slugs/{slug}` | – | `200 {available: bool, reason?: string}` |
 | GET | `/api/pages/{id}/qr.svg` | – | SVG QR code of the public URL |
-| GET | `/api/pages/{id}/stats?days=30` | – | `200 Stats` |
+| GET | `/api/pages/{id}/stats?days=30` | – | `200 Stats`; `days` is 1–30, larger values return 30 |
 
 Slugs: 3–32 chars, `[a-z0-9][a-z0-9-_]*`, some reserved. Limit 5 pages per user.
 
@@ -122,20 +149,61 @@ Slugs: 3–32 chars, `[a-z0-9][a-z0-9-_]*`, some reserved. Limit 5 pages per use
 
 Changing `preset` on PATCH without `colors` resets the colors to that preset.
 
-`Stats`: `{"total_views": 12, "views": [{"day": "2026-10-01", "count": 3}], "blocks": [{"block_id": "uuid", "label": "Instagram", "count": 4}]}`
+`Stats`:
+
+```json
+{
+  "days": 30,
+  "total_views": 12,
+  "views": [{"day": "2026-10-01", "count": 3}],
+  "blocks": [{"block_id": "uuid", "label": "Instagram", "count": 4, "ctr": 0.3333}],
+  "referrers": [{"name": "instagram.com", "count": 7}, {"name": "direct", "count": 5}],
+  "countries": [{"name": "US", "count": 9}, {"name": "unknown", "count": 3}]
+}
+```
+
+- `total_views` and every list cover the last `days` days, ending today (server date).
+- `ctr` is the block's clicks divided by `total_views`, rounded to 4 decimals, and 0 with no views. Views served from a cache are not counted, so it can exceed 1.
+- `referrers`: top 20 by views. The name is the `Referer` host, lowercased, without `www.` or port. `direct` covers no referrer, non-web referrers and links from the same host. After 200 distinct referrers for a page in one day, the rest count as `other`. Referrers apply to page views only.
+- `countries`: top 20 ISO 3166 alpha-2 codes from Cloudflare's `CF-IPCountry` header; missing, `XX` and `T1` (Tor) count as `unknown`.
+- Only daily totals are stored: no IP addresses, cookies or user agents. Rows older than `ZELDA_STATS_RETENTION_DAYS` (default 400) are deleted hourly.
+
+## Account settings
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/account/settings` | – | `200 AccountSettings` |
+| PATCH | `/api/account/settings` | any of `AccountSettings` | `200 AccountSettings` |
+
+`AccountSettings`: `{"weekly_stats_email": false}`
+
+Turning `weekly_stats_email` on needs a verified email (`403 {"error":{"code":"email_unverified","field":"weekly_stats_email"}}`). When it is on, a background job emails a summary of the previous Monday–Sunday (UTC) every Monday, at most once per week: views, clicks and click-through per page, plus the top referrers and countries across all the user's pages. The first email is sent in the week after opting in.
+
+Each email links to `GET /unsubscribe/weekly-stats?token=...`, which turns the email off and shows a confirmation page. The token is an HMAC of the user ID with a key stored in the database, and it does not expire. The email also carries `List-Unsubscribe` and `List-Unsubscribe-Post` headers; mail clients' one-click `POST` to the same URL returns `204`. Invalid tokens get `400`.
 
 ## Blocks
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| POST | `/api/pages/{id}/blocks` | `{type, data, enabled?}` | `201 Block` (appended) |
-| PATCH | `/api/pages/{id}/blocks/{blockId}` | `{data?, enabled?}` | `200 Block` |
+| POST | `/api/pages/{id}/blocks` | `{type, data, enabled?, starts_at?, ends_at?}` | `201 Block` (appended) |
+| PATCH | `/api/pages/{id}/blocks/{blockId}` | `{data?, enabled?, starts_at?, ends_at?}` | `200 Block` |
 | DELETE | `/api/pages/{id}/blocks/{blockId}` | – | `204` |
 | PUT | `/api/pages/{id}/blocks/order` | `{ids: [uuid, ...]}` (all block IDs) | `204` |
 
-`Block`: `{id, type, data, enabled, position, label}` where `label` is the server's display name for lists.
+`Block`: `{id, type, data, enabled, position, label, starts_at, ends_at}` where `label` is the server's display name for lists and `starts_at`/`ends_at` are RFC 3339 UTC strings or `null`.
 
 Limit 100 blocks per page. Validation errors return `422` with `field` set to the data key.
+
+When link screening is configured, web destinations are checked on create and update: `link`, `image` and `contact` `url`, `embed` `url`, the profile URL of a `service` block, and a `qr` `value` that is an http(s) URL. A listed destination returns `422 {"error":{"code":"blocked_destination","field":"url" or "value","message":"..."}}`. Publishing a page with a listed destination returns the same code with `field: "published"`. Only the destination URL is sent to the screening provider.
+
+### Schedules
+
+`starts_at` and `ends_at` set an optional visibility window. Send RFC 3339 times with a zone (`2026-10-02T18:00:00Z` or `2026-10-02T13:00:00-05:00`); the server stores and returns UTC. A block is visible from `starts_at` (inclusive) until `ends_at` (exclusive). A `null` or missing bound is open. On PATCH, an omitted field keeps its value and `null` clears it.
+
+- `ends_at` must be after `starts_at`; otherwise `422` with `field: "ends_at"`. An unparseable time returns `422` with that field.
+- Public pages, click beacons (`/t/{blockId}`) and vCards (`/vcard/{blockId}`) treat a block outside its window like a disabled block. Visibility is computed per request, so no redeploy or edit is needed when a window opens or closes.
+- The owner preview (`/preview/{pageId}`) shows enabled blocks outside their window with a "Scheduled: shows from …" or "Expired …" badge.
+- Public pages send `Cache-Control: public, max-age=60`. When an enabled block starts or ends within the next 60 seconds, `max-age` drops to the whole seconds remaining before that boundary, so cached copies expire by the time the page changes.
 
 ### Block types and `data`
 
@@ -236,5 +304,9 @@ The page image (`og:image`, then `twitter:image`) is downloaded and stored as th
 | POST | `/api/admin/reports/{id}/resolve` | – | `204` |
 | POST | `/api/admin/pages/{id}/suspend` | `{suspended: bool}` | `204` |
 | POST | `/api/admin/users/{id}/suspend` | `{suspended: bool}` | `204` |
+| GET | `/api/admin/users/pending` | – | `200 [{id, email, email_verified, created_at, publish_unlocks_at, pages: [slug]}]`: accounts still inside the publish gate |
+| POST | `/api/admin/users/{id}/trust` | – | `204`; the account can publish now |
 
-`reason`: `spam | scam | impersonation | illegal | other`.
+`reason`: `spam | scam | phishing | impersonation | illegal | other`.
+
+Every 6 hours the server re-screens published pages (200 per pass, least recently checked first). If a page links to a listed destination, it is unpublished, a `phishing` report naming the URL is added to `/api/admin/reports`, and the owner gets an email. The owner can republish after removing the link.

@@ -4,9 +4,11 @@ import { useCatalog } from "../../catalog";
 import { BLOCK_ICONS, Icon } from "../../components/Icon";
 import { ConfirmButton, Notice, Switch } from "../../components/ui";
 import { BLOCK_FALLBACK, BLOCK_ORDER, blockSummary } from "../../lib/blocks";
+import type { BlockSchedule } from "../../lib/schedule";
 import { MAX_BLOCKS, moveItem } from "../../lib/validate";
 import { BlockForm } from "./BlockForm";
 import { ImportPanel } from "./ImportPanel";
+import { ScheduleBadge } from "./ScheduleBadge";
 import { ServiceMonogram, ServicePicker } from "./ServicePicker";
 import type { EditorProps } from "./types";
 
@@ -146,8 +148,8 @@ export function BlocksTab({ page, setPage, saved }: EditorProps) {
           state={adding}
           setState={setAdding}
           typeName={typeName}
-          onCreate={async (type, data) => {
-            const block = await api.createBlock(page.id, type, data, true);
+          onCreate={async (type, data, schedule) => {
+            const block = await api.createBlock(page.id, type, data, true, schedule);
             setBlocks((bs) => [...bs, block]);
             setAdding(null);
             setAnnounce(`Added ${block.label || typeName(block.type)}.`);
@@ -240,6 +242,7 @@ export function BlocksTab({ page, setPage, saved }: EditorProps) {
                       <span className="block-type">{service ? service.name : typeName(block.type)}</span>
                       {summary && <span className="block-summary">{summary}</span>}
                     </span>
+                    <ScheduleBadge block={block} />
                   </div>
                   <div className="block-actions">
                     <Switch checked={block.enabled} onChange={(v) => void toggle(block, v)} label={`Show ${name} on page`} hideLabel />
@@ -284,10 +287,11 @@ export function BlocksTab({ page, setPage, saved }: EditorProps) {
                       type={block.type}
                       service={service}
                       initial={block.data}
+                      initialSchedule={{ starts_at: block.starts_at ?? null, ends_at: block.ends_at ?? null }}
                       submitLabel="Save changes"
                       onCancel={() => setEditingId(null)}
-                      onSubmit={async (data) => {
-                        const updated = await api.updateBlock(page.id, block.id, { data });
+                      onSubmit={async (data, schedule) => {
+                        const updated = await api.updateBlock(page.id, block.id, { data, ...schedule });
                         setBlocks((bs) => bs.map((b) => (b.id === block.id ? updated : b)));
                         setEditingId(null);
                         saved();
@@ -313,7 +317,7 @@ function AddBlockPanel({
   state: NonNullable<AddState>;
   setState: (s: AddState) => void;
   typeName: (t: BlockType) => string;
-  onCreate: (type: BlockType, data: Record<string, string | boolean | undefined>) => Promise<void>;
+  onCreate: (type: BlockType, data: Record<string, string | boolean | undefined>, schedule: BlockSchedule) => Promise<void>;
 }) {
   const catalog = useCatalog();
   const known = new Set<string>(BLOCK_ORDER);
@@ -395,7 +399,7 @@ function AddBlockPanel({
           submitLabel="Add to page"
           onCancel={() => setState(null)}
           onChangeService={state.type === "service" ? () => setState({ step: "service" }) : undefined}
-          onSubmit={(data) => onCreate(state.type, data)}
+          onSubmit={(data, schedule) => onCreate(state.type, data, schedule)}
         />
       )}
     </section>

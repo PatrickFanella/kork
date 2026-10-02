@@ -1,0 +1,143 @@
+{{define "legal"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#d4a56c">
+<title>{{.Title}} · {{.AppName}}</title>
+<link rel="icon" href="/static/brand/favicon.svg?v={{.AssetVersion}}" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/brand/apple-touch-icon.png?v={{.AssetVersion}}">
+<link rel="canonical" href="{{.BaseURL}}/{{.Doc}}">
+<link rel="stylesheet" href="/static/site.css?v={{.AssetVersion}}">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/"><img src="/static/brand/favicon.svg?v={{.AssetVersion}}" alt="" width="36" height="36"><span>{{.AppName}}</span></a>
+  <nav><a href="/app/login">Log in</a></nav>
+</header>
+<main class="site legal">
+  {{.DraftNote}}
+  <p class="kicker">VERSION {{.TermsVersion}}</p>
+  {{if eq .Doc "terms"}}{{template "terms-body" .}}{{else}}{{template "privacy-body" .}}{{end}}
+</main>
+<footer class="site-footer"><span>{{.AppName}} is made by <a href="https://subcult.tv/">SUBCULT</a>. <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></span></footer>
+</body>
+</html>
+{{end}}
+
+{{define "terms-body"}}
+<h1>Terms of service</h1>
+<p class="lede">These terms cover your use of {{.AppName}}, the link page service at {{.BaseURL}}. By creating an account you agree to them.</p>
+
+<h2>Who runs {{.AppName}}</h2>
+<p>{{.AppName}} is run by SUBCULT (<a href="https://subcult.tv/">subcult.tv</a>). "We" and "us" mean SUBCULT. Questions go to <a href="mailto:{{.ContactEmail}}">{{.ContactEmail}}</a>.</p>
+
+<h2>Your account</h2>
+<ul>
+  <li>Sign up with an email address you control. You need to confirm it before you can publish a page.</li>
+  <li>Keep your password to yourself. You are responsible for what happens under your account.</li>
+  <!-- TODO(owner): decide on a minimum age, if any, and state it here. -->
+</ul>
+
+<h2>What you can't do</h2>
+<p>Don't use {{.AppName}} to:</p>
+<ul>
+  <li>phish for passwords, payment details or other personal information;</li>
+  <li>run scams, fake giveaways or fraudulent payment requests;</li>
+  <li>link to or host malware;</li>
+  <li>publish illegal content;</li>
+  <li>pretend to be another person, brand or organization;</li>
+  <li>harass, threaten or dox anyone;</li>
+  <li>overload, probe or get around the limits of the service.</li>
+</ul>
+
+<h2>Moderation</h2>
+<p>Anyone can report a page. We may review any page, and we may unpublish pages, remove content or suspend accounts that break these terms, with or without notice. Suspended accounts can't sign in.</p>
+
+<h2>Your content</h2>
+<p>You keep ownership of what you put on {{.AppName}}: text, links, images and settings. You give us permission to store, copy, display and serve that content, including on your public page, in QR codes and in previews, only as needed to run {{.AppName}}. That permission ends when you delete the content or your account, apart from copies in backups until they expire.</p>
+<p>Only upload content you have the right to share.</p>
+
+<h2>Links, payments and embeds</h2>
+<p>Payment buttons link straight to services such as Cash App, PayPal or Venmo, or show an address to copy. {{.AppName}} doesn't handle money, takes no cut and isn't part of any transaction between you and your visitors. We don't control the sites and players that pages link to or embed.</p>
+
+<h2>No warranty</h2>
+<p>{{.AppName}} is provided as is. We don't guarantee that it will be available, fast or free of errors, and we may change or remove features. Keep your own copy of anything important; you can download your data from Settings at any time.</p>
+<p>To the extent the law allows, we are not liable for indirect or consequential losses, or for lost income, arising from your use of {{.AppName}}.</p>
+
+<h2>Ending your account</h2>
+<p>You can delete your account in Settings whenever you like. We may suspend or close accounts that break these terms.</p>
+
+<h2>Changes to these terms</h2>
+<p>We may update these terms. The new version will be posted here with a new version date. If you keep using {{.AppName}} after a change, the new terms apply to you.</p>
+<!-- TODO(owner): decide whether to promise advance notice (for example by email) of material changes. -->
+
+<h2>Governing law</h2>
+<!-- TODO(owner): choose the governing law and venue. -->
+<p>To be added.</p>
+
+<h2>Contact</h2>
+<p><a href="mailto:{{.ContactEmail}}">{{.ContactEmail}}</a>. See also the <a href="/privacy">privacy policy</a>.</p>
+{{end}}
+
+{{define "privacy-body"}}
+<h1>Privacy policy</h1>
+<p class="lede">What {{.AppName}} stores, who else handles it, and how to get it back or delete it.</p>
+
+<h2>Who is responsible</h2>
+<p>{{.AppName}} is run by SUBCULT (<a href="https://subcult.tv/">subcult.tv</a>). Write to <a href="mailto:{{.ContactEmail}}">{{.ContactEmail}}</a> with questions or requests about your data.</p>
+
+<h2>If you have an account</h2>
+<p>We store:</p>
+<ul>
+  <li>your email address, when you confirmed it, and when you signed up;</li>
+  <li>your password as an argon2id hash (we never store the password itself);</li>
+  <li>which version of the terms you accepted, and when;</li>
+  <li>your pages: names, titles, bios, themes and every block you add;</li>
+  <li>custom domains you add to a page;</li>
+  <li>images you upload, with their type and size;</li>
+  <li>daily totals of views and clicks for your pages (see below);</li>
+  <li>a record of each signed-in session, and single-use links for email confirmation, password reset and email changes. These are stored as hashes and expire;</li>
+  <li>a new email address you asked to switch to, until you confirm it.</li>
+</ul>
+
+<h2>If you visit a page</h2>
+<ul>
+  <li>We don't store visitors' IP addresses, cookies or browser details.</li>
+  <li>We count page views and link clicks as one number per page or link per day. Nothing in that count identifies a visitor.</li>
+  <li>To skip bots, the server checks the browser's user agent when counting and then discards it.</li>
+  <li>To limit abuse, the server keeps IP addresses in memory for up to an hour to rate-limit signups, sign-ins, password resets, reports and click counts. They are not written to the database or logs.</li>
+  <li>The {{.AppName}} application logs each request's method, host, path, status and duration, without IP addresses or user agents.</li>
+  <!-- TODO(owner): confirm the reverse proxy in front of the app (Caddy on Almaz) does not keep access logs with IP addresses, or describe them here. -->
+  <li>If you report a page, we store the page, the reason and the details you write, but not who sent it.</li>
+</ul>
+
+<h2>Cookies</h2>
+<p>{{.AppName}} sets one cookie, <code>zelda_session</code>, and only when you sign in to the editor. It keeps you signed in for up to 30 days or until you sign out. Public pages set no cookies. There are no analytics or advertising cookies.</p>
+
+<h2>Embeds and links on pages</h2>
+<p>A page owner can embed players from YouTube, Vimeo, Spotify, SoundCloud, Twitch or Apple Music. When a page with an embed loads, your browser connects to that provider, which can see your IP address and may set cookies under its own policy. Links on a page go straight to their destination.</p>
+
+<h2>Services that handle data for us</h2>
+<ul>
+  <li><strong>Cloudflare</strong> carries all traffic to {{.AppName}}. It sees visitors' IP addresses and request details in order to deliver pages.</li>
+  <li><strong>Brevo</strong> sends account emails (confirmation, password reset and email change), so it receives your email address and the message.</li>
+  <li>{{.AppName}} runs on a server operated by SUBCULT. The database and uploaded images are stored there.</li>
+</ul>
+<p>We don't sell your data and {{.AppName}} has no ads.</p>
+
+<h2>How long we keep it</h2>
+<p>We keep account data for as long as the account exists. When you delete your account, your pages, blocks, domains, uploaded images, stats, sessions and email address are removed immediately. Deleted data can remain in our backups until they rotate out: we keep 14 nightly copies, so about two weeks.</p>
+
+<h2>Your choices</h2>
+<ul>
+  <li><strong>Download your data:</strong> Settings &rarr; Download my data gives you a ZIP with your account details, pages, blocks, domains, themes, stats and uploaded images.</li>
+  <li><strong>Correct it:</strong> edit your pages any time, and change your email or password in Settings.</li>
+  <li><strong>Delete it:</strong> Settings &rarr; Delete account.</li>
+  <li>For anything else, write to <a href="mailto:{{.ContactEmail}}">{{.ContactEmail}}</a>.</li>
+</ul>
+
+<h2>Changes</h2>
+<p>We'll post changes to this policy here with a new version date.</p>
+<p>See also the <a href="/terms">terms of service</a>.</p>
+{{end}}

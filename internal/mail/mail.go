@@ -16,6 +16,8 @@ type Message struct {
 	To      string
 	Subject string
 	Body    string
+	// Headers are extra header lines, such as List-Unsubscribe.
+	Headers map[string]string
 }
 
 type Sender interface {
@@ -40,6 +42,13 @@ func (s SMTP) Send(_ context.Context, m Message) error {
 	if strings.ContainsAny(m.To+m.Subject, "\r\n") {
 		return fmt.Errorf("invalid header value")
 	}
+	var extra strings.Builder
+	for k, v := range m.Headers {
+		if strings.ContainsAny(k+v, "\r\n") || strings.ContainsAny(k, ": ") {
+			return fmt.Errorf("invalid header %q", k)
+		}
+		extra.WriteString(k + ": " + v + "\r\n")
+	}
 	addr := net.JoinHostPort(s.Host, strconv.Itoa(s.Port))
 	var auth smtp.Auth
 	if s.User != "" {
@@ -49,6 +58,7 @@ func (s SMTP) Send(_ context.Context, m Message) error {
 		"To: " + m.To + "\r\n" +
 		"Subject: " + m.Subject + "\r\n" +
 		"Date: " + time.Now().UTC().Format(time.RFC1123Z) + "\r\n" +
+		extra.String() +
 		"MIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" +
 		strings.ReplaceAll(m.Body, "\n", "\r\n")
 	return smtp.SendMail(addr, auth, extractAddr(s.From), []string{m.To}, []byte(msg))

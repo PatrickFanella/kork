@@ -56,6 +56,8 @@ The end-to-end test (`internal/server/server_test.go`) drops and recreates the s
 2. Custom domains: the user adds a hostname in the editor, creates the TXT record `_zelda.<host>` and a CNAME to `ZELDA_DOMAIN_TARGET`, then presses Verify. The app checks both records. Caddy issues a certificate on the first request after asking `/internal/tls-ask`, which approves only verified domains. Caddy blocks `/internal/*` from outside, and the app answers it only for private-network callers.
 3. Configure SMTP before opening signups. Unverified accounts can build pages but can't publish them.
 
+Stats are daily totals per page: views, clicks, referrer domains and countries (from Cloudflare's `CF-IPCountry` header). No IPs, cookies or user agents are stored. An hourly job deletes rows older than `ZELDA_STATS_RETENTION_DAYS` (default 400) and sends the opt-in weekly stats email on Mondays (UTC); the editor shows up to 30 days.
+
 Ports 80 and 443 must reach Caddy for ACME. If the service sits behind an existing edge proxy instead, drop the `caddy` service, forward the base host and custom domains to `zelda:8080`, keep `/internal/*` private, and reuse the same `ask` URL for on-demand TLS.
 
 ### Behind an existing proxy
@@ -81,6 +83,12 @@ docker compose -p zelda -f docker-compose.proxy.yml up -d zelda
 
 The `.env` file is not backed up; recreate it from `.env.example` (a new `POSTGRES_PASSWORD` is fine when restoring into a fresh volume).
 
+### Terms and privacy
+
+`/terms` and `/privacy` are rendered from `internal/render/templates/legal.html`. The text is a draft awaiting owner review; `render.TermsVersion` (`2026-10-02-draft`) is stored with each new signup, so change it whenever the wording changes. The privacy policy describes what the code stores; update it when that changes. `ZELDA_CONTACT_EMAIL` (default `hello@subcult.tv`) is the contact address shown on both pages.
+
+Users manage their account at `/app/settings`: change password or email, download a ZIP of their data, or delete the account.
+
 ### Abuse controls
 
 - Email verification before publishing.
@@ -88,6 +96,13 @@ The `.env` file is not backed up; recreate it from `.env.example` (a new `POSTGR
 - Server-side fetches (link-page import, link previews) refuse private, loopback, link-local and metadata addresses at dial time, allow only ports 80/443, and cap redirects, time and size. Fetched images are stored as uploads, never hotlinked.
 - Reserved names (`admin`, `api`, `support`…), URL scheme allowlist, image-only uploads checked by content (no SVG), strict CSP on public pages.
 - Visitors can report a page; admins see reports in the editor and can suspend pages or accounts.
+- New accounts can publish after `ZELDA_PUBLISH_MIN_ACCOUNT_AGE` (default `24h`, `0` turns it off). Admins can approve an account sooner from the Admin screen. Accounts that existed before this gate was added are trusted.
+- Link screening. Block destinations are checked on save, and published pages are re-checked every 6 hours. A page that links to a listed URL is unpublished and reported as `phishing`. Providers, which can be combined:
+  - `ZELDA_SAFE_BROWSING_KEY`: Google Safe Browsing Lookup API v4. Google's terms limit this API to non-commercial use; a paid service needs Google Web Risk instead.
+  - `ZELDA_BLOCKLIST_FILE`: one entry per line. A hostname blocks that host and its subdomains; a hosts-file line (`0.0.0.0 host`) works the same way; a full `https://` URL blocks only that URL. `#` starts a comment.
+  - `ZELDA_BLOCKLIST_URL`: a feed downloaded at startup (when the file is older than a day) and then daily, saved to `ZELDA_BLOCKLIST_FILE` if set. Examples: the URLhaus host file `https://urlhaus.abuse.ch/downloads/hostfile/` or the OpenPhish community feed `https://openphish.com/feed.txt`.
+
+  With no provider set, nothing is screened and the server logs a warning at startup. Verdicts are cached for 24 hours (safe) and 7 days (listed). If a provider is down, unlisted links are allowed and checked again later.
 
 ## Brand
 
