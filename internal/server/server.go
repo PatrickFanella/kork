@@ -216,6 +216,14 @@ type ctxKey int
 
 const userKey ctxKey = 1
 
+// withRole grants admin to verified users listed in ZELDA_ADMIN_EMAILS.
+func (s *Server) withRole(u *store.User) *store.User {
+	if u != nil && u.EmailVerified && s.cfg.AdminEmails[strings.ToLower(u.Email)] {
+		u.IsAdmin = true
+	}
+	return u
+}
+
 func userFrom(r *http.Request) *store.User {
 	u, _ := r.Context().Value(userKey).(*store.User)
 	return u
@@ -232,7 +240,7 @@ func (s *Server) api(next http.HandlerFunc) http.HandlerFunc {
 		r.Body = http.MaxBytesReader(w, r.Body, 6<<20)
 		if c, err := r.Cookie(sessionCookie); err == nil && c.Value != "" {
 			if u, err := s.store.UserBySession(r.Context(), c.Value); err == nil {
-				r = r.WithContext(context.WithValue(r.Context(), userKey, u))
+				r = r.WithContext(context.WithValue(r.Context(), userKey, s.withRole(u)))
 			}
 		}
 		next(w, r)

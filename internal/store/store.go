@@ -83,10 +83,11 @@ func scanUser(row pgx.Row) (*User, error) {
 	return &u, nil
 }
 
-// CreateUser inserts a user; the first user ever created becomes admin.
+// CreateUser inserts a user. Admin rights come from ZELDA_ADMIN_EMAILS or the
+// is_admin column, never from signup order.
 func (s *Store) CreateUser(ctx context.Context, email, hash string) (*User, error) {
-	u, err := scanUser(s.pool.QueryRow(ctx, `INSERT INTO users (email, password_hash, is_admin)
-		VALUES ($1, $2, NOT EXISTS (SELECT 1 FROM users)) RETURNING `+userCols, email, hash))
+	u, err := scanUser(s.pool.QueryRow(ctx, `INSERT INTO users (email, password_hash)
+		VALUES ($1, $2) RETURNING `+userCols, email, hash))
 	if err != nil && isUnique(err) {
 		return nil, ErrConflict
 	}

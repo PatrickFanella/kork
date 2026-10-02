@@ -1,0 +1,47 @@
+# For hosts where an existing reverse proxy terminates TLS (for example a
+# Cloudflare tunnel into a shared Caddy). Publishes the app on ZELDA_PUBLISH
+# only; there is no bundled Caddy, so custom domains are normally disabled.
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: zelda
+      POSTGRES_DB: zelda
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zelda"]
+      interval: 5s
+      retries: 10
+
+  zelda:
+    build: .
+    image: zelda:${ZELDA_RELEASE:-local}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      ZELDA_DATABASE_URL: postgres://zelda:${POSTGRES_PASSWORD}@postgres:5432/zelda?sslmode=disable
+      ZELDA_ADDR: ":8080"
+    ports:
+      - "${ZELDA_PUBLISH:?set ZELDA_PUBLISH, e.g. 10.0.0.56:3053}:8080"
+    volumes:
+      - uploads:/data
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [internal, egress]
+
+networks:
+  internal:
+    internal: true
+  egress: {}
+
+volumes:
+  pgdata:
+  uploads:

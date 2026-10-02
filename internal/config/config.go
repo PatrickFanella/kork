@@ -23,6 +23,10 @@ type Config struct {
 	TrustProxy bool
 	// SecureCookies sets the Secure flag; on unless BaseURL is http.
 	SecureCookies bool
+	// AdminEmails grants admin to these addresses once they are verified.
+	AdminEmails map[string]bool
+	// CustomDomains enables attaching user domains (needs on-demand TLS in front).
+	CustomDomains bool
 
 	SMTPHost string
 	SMTPPort int
@@ -52,6 +56,11 @@ func Load() (*Config, error) {
 		SMTPUser:     env("ZELDA_SMTP_USER", ""),
 		SMTPPass:     env("ZELDA_SMTP_PASSWORD", ""),
 		MailFrom:     env("ZELDA_MAIL_FROM", ""),
+	}
+	c.CustomDomains = env("ZELDA_CUSTOM_DOMAINS", "true") == "true"
+	c.AdminEmails = map[string]bool{}
+	for _, e := range strings.FieldsFunc(env("ZELDA_ADMIN_EMAILS", ""), func(r rune) bool { return r == ',' || r == ' ' }) {
+		c.AdminEmails[strings.ToLower(e)] = true
 	}
 	port, err := strconv.Atoi(env("ZELDA_SMTP_PORT", "587"))
 	if err != nil {

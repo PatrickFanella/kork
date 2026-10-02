@@ -34,7 +34,7 @@ make web    # build the editor once (or after editor changes)
 make run    # starts Postgres on :5433 and the server on :8080
 ```
 
-Open http://localhost:8080/app/signup. Without SMTP, verification and reset links are printed in the server log. The first account becomes the admin.
+Open http://localhost:8080/app/signup. Without SMTP, verification and reset links are printed in the server log. Set `ZELDA_ADMIN_EMAILS` to make your account an admin.
 
 For editor work, run `cd web && npm run dev` alongside `make run`; Vite proxies API and preview calls to :8080.
 
@@ -57,6 +57,12 @@ The end-to-end test (`internal/server/server_test.go`) drops and recreates the s
 3. Configure SMTP before opening signups. Unverified accounts can build pages but can't publish them.
 
 Ports 80 and 443 must reach Caddy for ACME. If the service sits behind an existing edge proxy instead, drop the `caddy` service, forward the base host and custom domains to `zelda:8080`, keep `/internal/*` private, and reuse the same `ask` URL for on-demand TLS.
+
+### Behind an existing proxy
+
+`docker-compose.proxy.yml` runs only Postgres and the app, published on `ZELDA_PUBLISH`. Point the proxy's hostname at that port, set `ZELDA_TRUST_PROXY=true`, and set `ZELDA_CUSTOM_DOMAINS=false` unless the proxy can issue certificates for arbitrary hostnames. The editor then hides the Domains tab.
+
+Admins are the addresses in `ZELDA_ADMIN_EMAILS`, once verified. Without SMTP, verify an account by hand: `UPDATE users SET email_verified_at = now() WHERE lower(email) = '...'`.
 
 ### Abuse controls
 

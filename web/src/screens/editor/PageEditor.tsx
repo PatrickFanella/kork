@@ -31,7 +31,9 @@ export function PageEditor() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
-  const tab = TABS.some((t) => t.key === params.get("tab")) ? (params.get("tab") as string) : "blocks";
+  const domainsEnabled = catalogState.status !== "ready" || catalogState.catalog.features?.custom_domains !== false;
+  const tabs = domainsEnabled ? TABS : TABS.filter((t) => t.key !== "domains");
+  const tab = tabs.some((t) => t.key === params.get("tab")) ? (params.get("tab") as string) : "blocks";
 
   useDocumentTitle(page ? page.title || page.slug : "Editor");
 
@@ -62,13 +64,13 @@ export function PageEditor() {
 
   function onTabKey(e: KeyboardEvent<HTMLButtonElement>, index: number) {
     let target = -1;
-    if (e.key === "ArrowRight" || e.key === "ArrowDown") target = (index + 1) % TABS.length;
-    else if (e.key === "ArrowLeft" || e.key === "ArrowUp") target = (index - 1 + TABS.length) % TABS.length;
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") target = (index + 1) % tabs.length;
+    else if (e.key === "ArrowLeft" || e.key === "ArrowUp") target = (index - 1 + tabs.length) % tabs.length;
     else if (e.key === "Home") target = 0;
-    else if (e.key === "End") target = TABS.length - 1;
+    else if (e.key === "End") target = tabs.length - 1;
     if (target >= 0) {
       e.preventDefault();
-      const t = TABS[target];
+      const t = tabs[target];
       if (t) selectTab(t.key, true);
     }
   }
@@ -149,7 +151,7 @@ export function PageEditor() {
         )}
 
         <div className="tabs" role="tablist" aria-label="Page settings">
-          {TABS.map((t, i) => (
+          {tabs.map((t, i) => (
             <button
               key={t.key}
               ref={(el) => {

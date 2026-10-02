@@ -102,7 +102,18 @@ func (s *Server) hostnameProblem(h string) string {
 	return ""
 }
 
+func (s *Server) domainsDisabled(w http.ResponseWriter) bool {
+	if !s.cfg.CustomDomains {
+		writeErr(w, http.StatusNotFound, "custom_domains_disabled", "custom domains are not enabled on this server", "")
+		return true
+	}
+	return false
+}
+
 func (s *Server) handleCreateDomain(w http.ResponseWriter, r *http.Request) {
+	if s.domainsDisabled(w) {
+		return
+	}
 	p := s.ownedPage(w, r)
 	if p == nil {
 		return
@@ -156,6 +167,9 @@ func (s *Server) ownedDomain(w http.ResponseWriter, r *http.Request) *store.Doma
 // handleVerifyDomain checks the TXT ownership record and that the hostname
 // resolves to the same addresses as the service's DNS target.
 func (s *Server) handleVerifyDomain(w http.ResponseWriter, r *http.Request) {
+	if s.domainsDisabled(w) {
+		return
+	}
 	d := s.ownedDomain(w, r)
 	if d == nil {
 		return

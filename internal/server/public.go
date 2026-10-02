@@ -63,6 +63,7 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 	var u *store.User
 	if c, err := r.Cookie(sessionCookie); err == nil {
 		u, _ = s.store.UserBySession(r.Context(), c.Value)
+		u = s.withRole(u)
 	}
 	if u == nil || !uuidRe.MatchString(id) {
 		s.notFoundPage(w)

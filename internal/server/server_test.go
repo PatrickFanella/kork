@@ -102,7 +102,8 @@ func setup(t *testing.T) *env {
 	e.ts.Start()
 	t.Cleanup(e.ts.Close)
 	u, _ := url.Parse(e.ts.URL)
-	cfg := &config.Config{BaseURL: e.ts.URL, BaseHost: u.Host, AppName: "Zelda", UploadDir: e.dir, DomainTarget: "edge.example.net"}
+	cfg := &config.Config{BaseURL: e.ts.URL, BaseHost: u.Host, AppName: "Zelda", UploadDir: e.dir, DomainTarget: "edge.example.net",
+		AdminEmails: map[string]bool{"alice@example.com": true}, CustomDomains: true}
 	e.srv = New(cfg, store.New(pool), e.mail, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
 	e.ts.Config.Handler = e.srv.Handler()
 	return e
@@ -206,8 +207,8 @@ func TestEndToEnd(t *testing.T) {
 	if code := alice.do("POST", "/api/auth/signup", map[string]string{"email": "Alice@example.com", "password": "correct horse battery"}, &me); code != 201 {
 		t.Fatalf("signup: %d", code)
 	}
-	if !me.User.IsAdmin || me.User.EmailVerified {
-		t.Fatalf("first user should be unverified admin: %+v", me.User)
+	if me.User.IsAdmin || me.User.EmailVerified {
+		t.Fatalf("listed admin must not get admin before verifying: %+v", me.User)
 	}
 	if code := e.client().do("POST", "/api/auth/signup", map[string]string{"email": "alice@EXAMPLE.com", "password": "correct horse battery"}, &ae); code != 409 {
 		t.Fatalf("duplicate email: %d", code)
@@ -276,7 +277,7 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatalf("publish unverified: %d %+v", code, ae)
 	}
 	tok := e.mail.tokenFor(t, "Alice@example.com", "/app/verify")
-	if code := anon.do("POST", "/api/auth/verify", map[string]string{"token": tok}, &me); code != 200 || !me.User.EmailVerified {
+	if code := anon.do("POST", "/api/auth/verify", map[string]string{"token": tok}, &me); code != 200 || !me.User.EmailVerified || !me.User.IsAdmin {
 		t.Fatalf("verify: %d", code)
 	}
 	if code := anon.do("POST", "/api/auth/verify", map[string]string{"token": tok}, &ae); code != 400 {
@@ -415,6 +416,17 @@ func TestEndToEnd(t *testing.T) {
 	}
 	if code, _, _ := anon.get("/alice"); code != 404 {
 		t.Fatalf("suspended page visible: %d", code)
+	}
+
+	// With custom domains off, the endpoints refuse and the catalog says so.
+	e.srv.cfg.CustomDomains = false
+	if code := alice.do("POST", "/api/pages/"+pid+"/domains", map[string]string{"hostname": "other.example.org"}, &ae); code != 404 || ae.Error.Code != "custom_domains_disabled" {
+		t.Fatalf("domains disabled: %d %+v", code, ae)
+	}
+	var cat struct{ Features map[string]bool }
+	anon.do("GET", "/api/catalog", nil, &cat)
+	if cat.Features["custom_domains"] {
+		t.Fatal("catalog should report custom domains off")
 	}
 
 	// Password reset revokes sessions.

@@ -62,8 +62,14 @@ export interface CatalogTheme {
   background: ThemeBackground;
 }
 
+export interface CatalogFeatures {
+  custom_domains: boolean;
+}
+
 export interface Catalog {
   services: CatalogService[];
+  /** Missing on older servers; treat absent flags as enabled. */
+  features?: CatalogFeatures;
   categories: KeyName[];
   block_types: BlockTypeInfo[];
   themes: CatalogTheme[];

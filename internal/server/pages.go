@@ -69,6 +69,7 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 		"button_shapes":   catalog.ButtonShapes,
 		"layouts":         catalog.Layouts,
 		"embed_providers": catalog.EmbedProviders,
+		"features":        map[string]bool{"custom_domains": s.cfg.CustomDomains},
 	})
 }
 
