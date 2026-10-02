@@ -32,7 +32,7 @@ On a verified custom domain, `/` renders the attached page.
 | POST | `/api/auth/signup` | `{email, password, accept_terms: true}` | `201 {user}` and session cookie. Password ≥ 10 chars. Without `accept_terms: true`: `422`, code `terms_required`, field `accept_terms`. The server records the current terms version (`render.TermsVersion`) and time. |
 | POST | `/api/auth/login` | `{email, password}` | `200 {user}` |
 | POST | `/api/auth/logout` | – | `204` |
-| GET | `/api/auth/me` | – | `200 {user}` or `401` |
+| GET | `/api/auth/me` | – | `200 {user, plan: Plan}` or `401` (see [Plans](#plans)) |
 | POST | `/api/auth/verify` | `{token}` | `200 {user}` |
 | POST | `/api/auth/resend-verification` | – | `204` |
 | POST | `/api/auth/forgot` | `{email}` | `204` (always) |
@@ -111,9 +111,9 @@ Categories: `social, video, music, creator, payment, crypto, contact, web`.
 | DELETE | `/api/pages/{id}` | – | `204` |
 | GET | `/api/slugs/{slug}` | – | `200 {available: bool, reason?: string}` |
 | GET | `/api/pages/{id}/qr.svg` | – | SVG QR code of the public URL |
-| GET | `/api/pages/{id}/stats?days=30` | – | `200 Stats`; `days` is 1–30, larger values return 30 |
+| GET | `/api/pages/{id}/stats?days=30` | – | `200 Stats`; `days` defaults to 30 and is capped at the plan's `stats_days` (Free 30, Pro 365) and at `ZELDA_STATS_RETENTION_DAYS` |
 
-Slugs: 3–32 chars, `[a-z0-9][a-z0-9-_]*`, some reserved. Limit 5 pages per user.
+Slugs: 3–32 chars, `[a-z0-9][a-z0-9-_]*`, some reserved. The page limit depends on the plan. A Free account at its limit gets `403 upgrade_required` with `feature: "pages"`; a Pro account at its limit gets `422 limit`.
 
 `PageSummary`: `{id, slug, title, published, url, updated_at}`
 
@@ -143,9 +143,12 @@ Slugs: 3–32 chars, `[a-z0-9][a-z0-9-_]*`, some reserved. Limit 5 pages per use
   "button_style": "filled | outline | soft | shadow | ledger",
   "button_shape": "square | rounded | pill",
   "layout": "stack | ledger",
-  "background": {"kind": "solid | gradient | image", "color2": "#rrggbb", "image_upload_id": "uuid"}
+  "background": {"kind": "solid | gradient | image", "color2": "#rrggbb", "image_upload_id": "uuid"},
+  "hide_branding": false
 }
 ```
+
+`hide_branding: true` removes the "Made with Kork" footer link. Turning it on needs Pro (`403 upgrade_required`, `feature: "remove_branding"`, `field: "hide_branding"`). Pages show the link whenever the owner's plan lacks the feature. The stored flag is kept, so other theme changes still save after Pro ends.
 
 Changing `preset` on PATCH without `colors` resets the colors to that preset.
 
@@ -154,6 +157,7 @@ Changing `preset` on PATCH without `colors` resets the colors to that preset.
 ```json
 {
   "days": 30,
+  "max_days": 30,
   "total_views": 12,
   "views": [{"day": "2026-10-01", "count": 3}],
   "blocks": [{"block_id": "uuid", "label": "Instagram", "count": 4, "ctr": 0.3333}],
@@ -162,7 +166,7 @@ Changing `preset` on PATCH without `colors` resets the colors to that preset.
 }
 ```
 
-- `total_views` and every list cover the last `days` days, ending today (server date).
+- `total_views` and every list cover the last `days` days, ending today (server date). `max_days` is the longest range this account can request.
 - `ctr` is the block's clicks divided by `total_views`, rounded to 4 decimals, and 0 with no views. Views served from a cache are not counted, so it can exceed 1.
 - `referrers`: top 20 by views. The name is the `Referer` host, lowercased, without `www.` or port. `direct` covers no referrer, non-web referrers and links from the same host. After 200 distinct referrers for a page in one day, the rest count as `other`. Referrers apply to page views only.
 - `countries`: top 20 ISO 3166 alpha-2 codes from Cloudflare's `CF-IPCountry` header; missing, `XX` and `T1` (Tor) count as `unknown`.
@@ -198,7 +202,7 @@ When link screening is configured, web destinations are checked on create and up
 
 ### Schedules
 
-`starts_at` and `ends_at` set an optional visibility window. Send RFC 3339 times with a zone (`2026-10-02T18:00:00Z` or `2026-10-02T13:00:00-05:00`); the server stores and returns UTC. A block is visible from `starts_at` (inclusive) until `ends_at` (exclusive). A `null` or missing bound is open. On PATCH, an omitted field keeps its value and `null` clears it.
+`starts_at` and `ends_at` set an optional visibility window. Setting a bound needs the `scheduled_links` feature, which every plan has for now; without it, create and update return `403 upgrade_required` with `field` naming the bound. Clearing a bound with `null` always works. Send RFC 3339 times with a zone (`2026-10-02T18:00:00Z` or `2026-10-02T13:00:00-05:00`); the server stores and returns UTC. A block is visible from `starts_at` (inclusive) until `ends_at` (exclusive). A `null` or missing bound is open. On PATCH, an omitted field keeps its value and `null` clears it.
 
 - `ends_at` must be after `starts_at`; otherwise `422` with `field: "ends_at"`. An unparseable time returns `422` with that field.
 - Public pages, click beacons (`/t/{blockId}`) and vCards (`/vcard/{blockId}`) treat a block outside its window like a disabled block. Visibility is computed per request, so no redeploy or edit is needed when a window opens or closes.
@@ -229,15 +233,19 @@ When link screening is configured, web destinations are checked on create and up
 | POST | `/api/pages/{id}/domains/{domainId}/verify` | – | `200 Domain` or `422` with the reason |
 | DELETE | `/api/pages/{id}/domains/{domainId}` | – | `204` |
 
+Adding a domain needs Pro. Free accounts get `403 upgrade_required` with `feature: "custom_domains"` and `field: "hostname"`. Pro includes 1 domain per account; adding another returns `422 limit`. Verifying also needs Pro, except for domains attached before plans existed. Removing a domain always works.
+
 `Domain`:
 
 ```json
 {
   "id": "uuid", "hostname": "links.alice.com", "verified": false,
   "txt_name": "_zelda.links.alice.com", "txt_value": "zelda-verify=abc123",
-  "target": "edge.example.com", "created_at": "..."
+  "target": "edge.example.com", "created_at": "...", "active": true
 }
 ```
+
+`active` is false when the owner's plan no longer covers the domain. The domain stays attached, but the page isn't served on it and `/internal/tls-ask` refuses it (see [Plans](#plans)).
 
 Setup instructions shown to the user: add the TXT record, point the hostname at `target` with a CNAME (or A/AAAA for apex domains), then press Verify. TLS is issued automatically on first request after verification.
 
@@ -306,7 +314,60 @@ The page image (`og:image`, then `twitter:image`) is downloaded and stored as th
 | POST | `/api/admin/users/{id}/suspend` | `{suspended: bool}` | `204` |
 | GET | `/api/admin/users/pending` | – | `200 [{id, email, email_verified, created_at, publish_unlocks_at, pages: [slug]}]`: accounts still inside the publish gate |
 | POST | `/api/admin/users/{id}/trust` | – | `204`; the account can publish now |
+| GET | `/api/admin/users?q=&limit=50` | – | `200 [AdminUser]`: accounts whose email contains `q` (case-insensitive), Pro first, then newest. `limit` is 1–200. |
+| POST | `/api/admin/users/{id}/plan` | `{plan: "free" or "pro", expires_at?: RFC 3339 or null}` | `200 Plan` for that user. Grants or revokes Pro by hand (`source: "manual"`). `expires_at` must be in the future; omitted or `null` means no expiry. `free` clears the source and expiry. |
+
+`AdminUser`: `{id, email, email_verified, suspended, created_at, plan, plan_source, plan_expires_at, effective_plan, domains_grace_until, pages}`. `plan` is the stored plan; `effective_plan` is `free` once a Pro grant has expired.
 
 `reason`: `spam | scam | phishing | impersonation | illegal | other`.
 
 Every 6 hours the server re-screens published pages (200 per pass, least recently checked first). If a page links to a listed destination, it is unpublished, a `phishing` report naming the URL is added to `/api/admin/reports`, and the owner gets an email. The owner can republish after removing the link.
+
+## Plans
+
+Every account is `free` or `pro`. Admins grant Pro by hand for now; billing will set `source` to `patreon` or `stripe` later. A Pro grant can have an expiry, after which the account acts as Free. All limits are in one table in `internal/plans/plans.go`. The values are placeholders until the owner sets pricing.
+
+| | Free | Pro |
+|---|---|---|
+| Pages | 5 (`ZELDA_FREE_PAGE_LIMIT`) | 25 |
+| Stats history | 30 days | 365 days |
+| Custom domains | 0 | 1 |
+| `remove_branding`: hide the footer credit | no | yes |
+| `custom_css` | no | yes (not built yet, #14) |
+| `custom_fonts`: font uploads | no | yes (not built yet, #14) |
+| `scheduled_links` | yes | yes |
+
+`Plan` (in `GET /api/auth/me`):
+
+```json
+{
+  "plan": "free",
+  "stored_plan": "pro",
+  "source": "manual",
+  "expires_at": "2026-11-01T00:00:00Z",
+  "domains_grace_until": "2026-11-08T00:00:00Z",
+  "pages": 5, "stats_days": 30, "custom_domains": 0,
+  "features": {"custom_domains": false, "remove_branding": false, "custom_css": false, "custom_fonts": false, "scheduled_links": true},
+  "pro": {"plan": "pro", "pages": 25, "stats_days": 365, "custom_domains": 1, "features": {"custom_domains": true, "...": true}}
+}
+```
+
+`plan`, the limits and `features` describe what the account can use now. `stored_plan`, `source` and `expires_at` describe the grant. `pro` lists Pro's limits for upgrade prompts. Plan changes apply on the next request, so the editor unlocks as soon as an admin grants Pro.
+
+A request for something the plan doesn't include returns `403`:
+
+```json
+{"error": {"code": "upgrade_required", "message": "Custom domains are part of Pro. Upgrade to add one.", "field": "hostname", "feature": "custom_domains"}}
+```
+
+`feature` is one of the keys above, or `pages`.
+
+### When Pro ends
+
+Data is kept; Pro-only settings stop applying.
+
+- Pages over the Free limit stay and keep working. New pages can't be created until the account is under the limit.
+- The footer credit comes back. The stored `hide_branding` flag is kept for when Pro returns.
+- Stats requests are capped at 30 days again. Older rows stay until `ZELDA_STATS_RETENTION_DAYS` removes them.
+- Custom domains keep serving for 7 days after `expires_at` (`domains_grace_until`). After that they stay attached but aren't served and get no certificate until Pro is granted again. Revoking Pro by hand (setting `free`) has no grace period.
+- Domains attached before plans existed (migration `0008`) keep working on any plan.

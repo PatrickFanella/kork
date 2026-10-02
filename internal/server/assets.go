@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"git.subcult.tv/subculture-collective/zelda/internal/plans"
 	"git.subcult.tv/subculture-collective/zelda/internal/store"
 )
 
@@ -130,8 +132,19 @@ func (s *Server) handleCreateDomain(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnprocessableEntity, "invalid", prob, "hostname")
 		return
 	}
-	d, err := s.store.CreateDomain(r.Context(), p.ID, h)
+	limits, ok := s.limitsFor(w, r)
+	if !ok {
+		return
+	}
+	if !limits.Features[plans.CustomDomains] || limits.CustomDomains < 1 {
+		writeUpgrade(w, string(plans.CustomDomains), upgradeMessage(plans.CustomDomains), "hostname")
+		return
+	}
+	d, err := s.store.CreateDomainLimit(r.Context(), p.UserID, p.ID, h, limits.CustomDomains)
 	switch {
+	case errors.Is(err, store.ErrAccountLimit):
+		writeErr(w, http.StatusUnprocessableEntity, "limit", fmt.Sprintf("your plan includes %d custom domain%s; remove one to add another",
+			limits.CustomDomains, plural(limits.CustomDomains)), "hostname")
 	case errors.Is(err, store.ErrConflict):
 		writeErr(w, http.StatusConflict, "domain_taken", "that hostname is already attached to a page", "hostname")
 	case errors.Is(err, store.ErrLimit):
@@ -176,6 +189,15 @@ func (s *Server) handleVerifyDomain(w http.ResponseWriter, r *http.Request) {
 	}
 	if d.Verified {
 		writeJSON(w, http.StatusOK, s.domainView(d))
+		return
+	}
+	// Domains from before plans can still be verified on any plan.
+	old, err := s.store.GrandfatheredDomains(r.Context(), d.PageID)
+	if err != nil {
+		s.serverErr(w, r, err)
+		return
+	}
+	if !old[d.ID] && !s.requireFeature(w, r, plans.CustomDomains, "") {
 		return
 	}
 	if !s.verifyLimit.allow("domain:" + d.ID) {
@@ -250,7 +272,7 @@ func (s *Server) handleTLSAsk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	domain := strings.ToLower(r.URL.Query().Get("domain"))
-	if domain == hostOnly(s.cfg.BaseHost) || s.store.DomainAllowed(r.Context(), domain) {
+	if domain == hostOnly(s.cfg.BaseHost) || s.domainServed(r.Context(), domain) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}

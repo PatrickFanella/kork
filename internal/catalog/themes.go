@@ -32,6 +32,9 @@ type Theme struct {
 	ButtonShape string     `json:"button_shape"`
 	Layout      string     `json:"layout"`
 	Background  Background `json:"background"`
+	// HideBranding asks to drop the "Made with" footer link. Pages honor it
+	// only while the owner's plan includes plans.RemoveBranding.
+	HideBranding bool `json:"hide_branding,omitempty"`
 }
 
 // Preset is a named starting theme.

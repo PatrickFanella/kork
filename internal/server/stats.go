@@ -13,10 +13,10 @@ import (
 )
 
 const (
-	// MaxStatsDays is the longest range the stats API returns. Every account
-	// gets 30 days for now; a paid plan can raise it, since rows are kept for
-	// ZELDA_STATS_RETENTION_DAYS.
-	MaxStatsDays = 30
+	// DefaultStatsDays is the range returned when days is missing. The
+	// longest range depends on the plan (plans.Limits.StatsDays), capped by
+	// ZELDA_STATS_RETENTION_DAYS since older rows are deleted.
+	DefaultStatsDays = 30
 	// statsTopN is how many referrers and countries the stats API lists.
 	statsTopN = 20
 )
@@ -46,6 +46,7 @@ type blockStat struct {
 
 type statsResponse struct {
 	Days       int               `json:"days"`
+	MaxDays    int               `json:"max_days"`
 	TotalViews int64             `json:"total_views"`
 	Views      []store.DayCount  `json:"views"`
 	Blocks     []blockStat       `json:"blocks"`
@@ -58,11 +59,19 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	if p == nil {
 		return
 	}
+	limits, ok := s.limitsFor(w, r)
+	if !ok {
+		return
+	}
+	maxDays := limits.StatsDays
+	if s.cfg.StatsRetentionDays > 0 {
+		maxDays = min(maxDays, s.cfg.StatsRetentionDays)
+	}
 	days, err := strconv.Atoi(r.URL.Query().Get("days"))
 	if err != nil || days < 1 {
-		days = MaxStatsDays
+		days = DefaultStatsDays
 	}
-	days = min(days, MaxStatsDays)
+	days = min(days, maxDays)
 	st, err := s.store.Stats(r.Context(), p.ID, days)
 	if err != nil {
 		s.serverErr(w, r, err)
@@ -73,7 +82,7 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		s.serverErr(w, r, err)
 		return
 	}
-	out := statsResponse{Days: days, TotalViews: st.TotalViews, Views: st.Views, Blocks: make([]blockStat, len(st.Blocks)),
+	out := statsResponse{Days: days, MaxDays: maxDays, TotalViews: st.TotalViews, Views: st.Views, Blocks: make([]blockStat, len(st.Blocks)),
 		Referrers: refs, Countries: countries}
 	for i, b := range st.Blocks {
 		out.Blocks[i] = blockStat{BlockID: b.BlockID, Label: blocks.Label(b.Type, b.Data), Count: b.Count,

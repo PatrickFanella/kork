@@ -32,6 +32,8 @@ type Config struct {
 	StatsRetentionDays int
 	// ContactEmail is shown on the terms and privacy pages.
 	ContactEmail string
+	// FreePageLimit is how many pages a Free account may create.
+	FreePageLimit int
 
 	// SafeBrowsingKey enables Google Safe Browsing checks of link destinations.
 	SafeBrowsingKey string
@@ -98,6 +100,10 @@ func Load() (*Config, error) {
 	c.StatsRetentionDays, err = strconv.Atoi(env("ZELDA_STATS_RETENTION_DAYS", "400"))
 	if err != nil || c.StatsRetentionDays < 30 {
 		return nil, errors.New("ZELDA_STATS_RETENTION_DAYS must be a number of days, at least 30")
+	}
+	c.FreePageLimit, err = strconv.Atoi(env("ZELDA_FREE_PAGE_LIMIT", "5"))
+	if err != nil || c.FreePageLimit < 1 {
+		return nil, errors.New("ZELDA_FREE_PAGE_LIMIT must be a number of pages, at least 1")
 	}
 	if c.DatabaseURL == "" {
 		return nil, errors.New("ZELDA_DATABASE_URL is required")

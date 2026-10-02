@@ -145,11 +145,11 @@ func TestAnalyticsCounting(t *testing.T) {
 		t.Errorf("click-through: %+v", st.Blocks)
 	}
 
-	// The range is capped at MaxStatsDays.
+	// A Free account's range is capped at its plan's 30 days.
 	for _, q := range []string{"?days=90", "?days=abc", ""} {
 		st = statsBody{}
 		alice.do("GET", "/api/pages/"+pageID+"/stats"+q, nil, &st)
-		if st.Days != MaxStatsDays || len(st.Views) != MaxStatsDays {
+		if st.Days != DefaultStatsDays || len(st.Views) != DefaultStatsDays {
 			t.Errorf("stats%s: days %d, %d view rows", q, st.Days, len(st.Views))
 		}
 	}

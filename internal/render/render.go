@@ -65,6 +65,8 @@ type Page struct {
 	// Badges marks blocks that the owner preview shows but visitors don't,
 	// keyed by block ID.
 	Badges map[string]Badge
+	// HideBranding drops the "Made with" footer link (Pro).
+	HideBranding bool
 
 	// Filled by WritePage.
 	CSSVars      template.CSS

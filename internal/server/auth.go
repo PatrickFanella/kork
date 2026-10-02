@@ -164,7 +164,13 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"user": userFrom(r)})
+	u := userFrom(r)
+	plan, err := s.planView(r.Context(), u.ID)
+	if err != nil {
+		s.serverErr(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"user": u, "plan": plan})
 }
 
 func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) {
