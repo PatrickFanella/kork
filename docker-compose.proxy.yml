@@ -32,6 +32,12 @@ services:
       - "${ZELDA_PUBLISH:?set ZELDA_PUBLISH, e.g. 10.0.0.56:3053}:8080"
     volumes:
       - uploads:/data
+    healthcheck:
+      test: ["CMD", "/zelda", "-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
