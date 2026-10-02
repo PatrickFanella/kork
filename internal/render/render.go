@@ -10,10 +10,12 @@ import (
 	"html/template"
 	"io"
 	"io/fs"
+	"regexp"
 	"strings"
 
 	"git.subcult.tv/subculture-collective/zelda/internal/blocks"
 	"git.subcult.tv/subculture-collective/zelda/internal/catalog"
+	"git.subcult.tv/subculture-collective/zelda/internal/customcss"
 )
 
 //go:embed templates/*.html
@@ -67,11 +69,27 @@ type Page struct {
 	Badges map[string]Badge
 	// HideBranding drops the "Made with" footer link (Pro).
 	HideBranding bool
+	// CustomCSS is the owner's stored custom CSS (Pro). WritePage sanitizes
+	// it again before output.
+	CustomCSS string
+	// FontBody and FontDisplay are /u/<id> URLs of uploaded fonts (Pro) for
+	// body text and headings.
+	FontBody    string
+	FontDisplay string
 
 	// Filled by WritePage.
 	CSSVars      template.CSS
+	ExtraCSS     template.CSS
 	AssetVersion string
 }
+
+var uploadURLRe = regexp.MustCompile(`^/u/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+// fontFamily names the @font-face rules for uploaded fonts.
+const (
+	bodyFontFamily    = "kork-body"
+	displayFontFamily = "kork-display"
+)
 
 // ThemeFrom decodes stored theme JSON, falling back to the default theme.
 func ThemeFrom(raw json.RawMessage) catalog.Theme {
@@ -86,25 +104,49 @@ func ThemeFrom(raw json.RawMessage) catalog.Theme {
 	return t
 }
 
-func cssVars(t catalog.Theme, bgImage string) template.CSS {
+func cssVars(t catalog.Theme, bgImage, fontBody, fontDisplay string) template.CSS {
 	c := t.Colors
 	bg2 := t.Background.Color2
 	if bg2 == "" {
 		bg2 = c.Surface
 	}
+	font := catalog.FontStacks[t.Font]
+	if uploadURLRe.MatchString(fontBody) {
+		font = `"` + bodyFontFamily + `", ` + font
+	}
 	var b strings.Builder
 	// Colors are validated #rrggbb values and the font stack comes from a fixed map.
 	fmt.Fprintf(&b, "--bg:%s;--surface:%s;--text:%s;--muted:%s;--accent:%s;--btn-bg:%s;--btn-text:%s;--bg2:%s;--font:%s;",
-		c.BG, c.Surface, c.Text, c.Muted, c.Accent, c.ButtonBG, c.ButtonText, bg2, catalog.FontStacks[t.Font])
+		c.BG, c.Surface, c.Text, c.Muted, c.Accent, c.ButtonBG, c.ButtonText, bg2, font)
+	if uploadURLRe.MatchString(fontDisplay) {
+		fmt.Fprintf(&b, `--font-display:"%s", %s;`, displayFontFamily, font)
+	}
 	if bgImage != "" && !strings.ContainsAny(bgImage, `"'()\`) {
 		fmt.Fprintf(&b, `--bg-image:url("%s");`, bgImage)
 	}
 	return template.CSS(b.String()) //nolint:gosec // see comment above
 }
 
+// extraCSS is the @font-face rules for uploaded fonts followed by the
+// owner's custom CSS, sanitized again here so stored data can't reach the
+// page unchecked. Upload URLs are checked against uploadURLRe.
+func extraCSS(p Page) template.CSS {
+	var b strings.Builder
+	for _, f := range []struct{ family, url string }{{bodyFontFamily, p.FontBody}, {displayFontFamily, p.FontDisplay}} {
+		if uploadURLRe.MatchString(f.url) {
+			fmt.Fprintf(&b, `@font-face{font-family:"%s";src:url("%s");font-display:swap}`, f.family, f.url)
+		}
+	}
+	if p.CustomCSS != "" {
+		b.WriteString(customcss.Sanitize(p.CustomCSS, customcss.AnyUpload).CSS)
+	}
+	return template.CSS(b.String()) //nolint:gosec // sanitized above
+}
+
 // WritePage renders a link page. bgImage is the resolved background upload URL.
 func WritePage(w io.Writer, p Page, bgImage string) error {
-	p.CSSVars = cssVars(p.Theme, bgImage)
+	p.CSSVars = cssVars(p.Theme, bgImage, p.FontBody, p.FontDisplay)
+	p.ExtraCSS = extraCSS(p)
 	p.AssetVersion = AssetVersion
 	return tmpl.ExecuteTemplate(w, "page", p)
 }

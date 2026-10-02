@@ -8,8 +8,9 @@ import { usePlan } from "../plan";
 const FEATURE_NAMES: Record<PlanFeature, string> = {
   custom_domains: "Custom domains",
   remove_branding: "Hide the “Made with Kork” footer link",
-  custom_css: "Custom CSS (coming soon)",
-  custom_fonts: "Font uploads (coming soon)",
+  custom_css: "Custom CSS",
+  custom_fonts: "Font uploads",
+  stats_export: "Download stats as CSV",
   scheduled_links: "Scheduled links",
 };
 

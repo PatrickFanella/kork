@@ -127,6 +127,8 @@ func (s *Server) renderPage(w http.ResponseWriter, r *http.Request, p *store.Pag
 		Preview: preview, Live: p.Live(), Nonce: n, Badges: badges,
 		HideBranding: theme.HideBranding && s.ownerCan(r.Context(), p.UserID, plans.RemoveBranding),
 	}
+	pro := s.proStyleFor(r.Context(), p, theme)
+	view.CustomCSS, view.FontBody, view.FontDisplay = pro.CSS, pro.FontBody, pro.FontDisplay
 	if p.AvatarUploadID != nil {
 		view.Avatar = uploadURL(*p.AvatarUploadID)
 		view.AvatarAbs = s.cfg.BaseURL + view.Avatar
@@ -143,7 +145,7 @@ func (s *Server) renderPage(w http.ResponseWriter, r *http.Request, p *store.Pag
 	}
 	h := w.Header()
 	h.Set("Content-Type", "text/html; charset=utf-8")
-	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'self' 'nonce-"+n+"'; script-src 'self'; img-src 'self' data:; "+
+	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'self' 'nonce-"+n+"'; script-src 'self'; img-src 'self' data:; font-src 'self'; "+
 		"frame-src "+frameSources+"; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'self'")
 	if !preview {
 		h.Set("Cache-Control", "public, max-age="+strconv.Itoa(publicCacheSeconds(stored, now)))

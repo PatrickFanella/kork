@@ -35,6 +35,16 @@ type Theme struct {
 	// HideBranding asks to drop the "Made with" footer link. Pages honor it
 	// only while the owner's plan includes plans.RemoveBranding.
 	HideBranding bool `json:"hide_branding,omitempty"`
+	// FontUploads names uploaded fonts (upload IDs) for body text and
+	// headings. Pages use them only while the owner's plan includes
+	// plans.CustomFonts; otherwise Font applies.
+	FontUploads *FontUploads `json:"font_uploads,omitempty"`
+}
+
+// FontUploads holds uploaded font IDs; empty means the preset font.
+type FontUploads struct {
+	Body    string `json:"body,omitempty"`
+	Display string `json:"display,omitempty"`
 }
 
 // Preset is a named starting theme.
@@ -170,6 +180,9 @@ func (t Theme) Normalize() (Theme, string, error) {
 		return t, "button_shape", errors.New("unknown button shape")
 	case !hasOption(Layouts, t.Layout):
 		return t, "layout", errors.New("unknown layout")
+	}
+	if f := t.FontUploads; f != nil && f.Body == "" && f.Display == "" {
+		t.FontUploads = nil
 	}
 	switch t.Background.Kind {
 	case "solid":

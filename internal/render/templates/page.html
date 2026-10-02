@@ -15,10 +15,10 @@
 <link rel="canonical" href="{{.CanonicalURL}}">
 {{if .Preview}}<meta name="robots" content="noindex">{{end}}
 <link rel="stylesheet" href="/static/page.css?v={{.AssetVersion}}">
-<style nonce="{{.Nonce}}">:root{ {{- .CSSVars -}} }</style>
+<style nonce="{{.Nonce}}">:root{ {{- .CSSVars -}} }{{.ExtraCSS}}</style>
 <script src="/static/page.js?v={{.AssetVersion}}" defer></script>
 </head>
-<body class="font-{{.Theme.Font}} btn-{{.Theme.ButtonStyle}} shape-{{.Theme.ButtonShape}} layout-{{.Theme.Layout}} bg-{{.Theme.Background.Kind}}">
+<body class="kork-page font-{{.Theme.Font}} btn-{{.Theme.ButtonStyle}} shape-{{.Theme.ButtonShape}} layout-{{.Theme.Layout}} bg-{{.Theme.Background.Kind}}">
 {{if .Preview}}<p class="preview-banner">{{if .Live}}Preview of your published page{{else}}Draft preview. Visitors can't see this page until you publish it.{{end}}</p>{{end}}
 <main class="page" id="main">
   <header class="profile">
@@ -97,7 +97,8 @@
   {{- end}}
   </ol>
 
-  <footer class="page-footer">
+</main>
+  <footer class="page-footer" id="page-footer">
     <button type="button" class="link-button" data-share="{{.CanonicalURL}}" data-title="{{.Title}}">Share</button>
     <span aria-hidden="true">·</span>
     <button type="button" class="link-button" data-report>Report</button>
@@ -110,7 +111,6 @@
     <span aria-hidden="true">·</span>
     <a href="{{.BaseURL}}/privacy">Privacy</a>
   </footer>
-</main>
 
 <dialog id="report-dialog" aria-labelledby="report-title">
   <form id="report-form" data-slug="{{.Slug}}">

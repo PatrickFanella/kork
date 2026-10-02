@@ -2373,3 +2373,30 @@ a.editor-url:hover {
   font: inherit;
   font-size: 0.85rem;
 }
+
+/* ---------- Pro styling: fonts and custom CSS ---------- */
+
+.font-slot-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.font-slot-row > .muted {
+  min-width: 7.5rem;
+}
+.code-textarea {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  tab-size: 2;
+  white-space: pre;
+  overflow-x: auto;
+}
+.css-warnings {
+  margin: 4px 0 0;
+  padding-left: 1.2em;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}

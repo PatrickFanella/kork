@@ -37,6 +37,7 @@ body.bg-image .page { background: color-mix(in srgb, var(--bg) 82%, transparent)
 
 .profile { margin-bottom: 2rem; text-align: center; }
 .avatar { display: block; width: 96px; height: 96px; margin: 0 auto 1rem; border-radius: 50%; object-fit: cover; background: var(--surface); }
+.profile h1, .item-heading h2 { font-family: var(--font-display, var(--font)); }
 .profile h1 { margin: 0; font-size: clamp(1.6rem, 6vw, 2.2rem); line-height: 1.1; letter-spacing: -.02em; overflow-wrap: anywhere; }
 .profile .bio { margin: .6rem auto 0; max-width: 46ch; color: var(--muted); white-space: pre-line; overflow-wrap: anywhere; }
 
@@ -193,7 +194,10 @@ body.bg-image .page { background: color-mix(in srgb, var(--bg) 82%, transparent)
   text-align: center;
 }
 
-.page-footer { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; margin-top: 3rem; color: var(--muted); font-size: .8rem; }
+.page-footer { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; width: min(calc(100% - 2rem), 600px); margin: 0 auto; padding: 1rem 0 2rem; color: var(--muted); font-size: .8rem; }
+/* The footer holds Report: keep it visible and above anything a page's custom
+   CSS draws (custom CSS is scoped to <main>, which comes earlier in the DOM). */
+body > #page-footer { position: relative !important; z-index: 2147483647 !important; display: flex !important; visibility: visible !important; opacity: 1 !important; isolation: isolate; }
 .page-footer a, .link-button { padding: 0; border: 0; color: inherit; background: none; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 
 dialog { width: min(calc(100% - 2rem), 420px); padding: 1.25rem; border: 1px solid var(--muted); border-radius: 14px; color: var(--text); background: var(--bg); }

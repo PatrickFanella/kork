@@ -7,6 +7,7 @@ import { contrastRatio, normalizeHex } from "../../lib/validate";
 import type { EditorProps } from "./types";
 import { ProBadge, UpgradeNote } from "../../components/Pro";
 import { planAllows, usePlan } from "../../plan";
+import { CustomCSSSection, FontsSection } from "./ProThemeSections";
 
 const COLOR_LABELS: Record<keyof ThemeColors, string> = {
   bg: "Background",
@@ -174,7 +175,11 @@ export function ThemeTab({ page, setPage, saved }: EditorProps) {
 
       <BackgroundSection theme={draft} onChange={(background) => update({ background })} />
 
+      <FontsSection value={draft.font_uploads} onChange={(font_uploads) => update({ font_uploads })} />
+
       <FooterSection hidden={draft.hide_branding === true} onChange={(hide_branding) => update({ hide_branding })} />
+
+      <CustomCSSSection page={page} setPage={setPage} saved={saved} />
     </div>
   );
 }

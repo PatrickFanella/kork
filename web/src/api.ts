@@ -105,6 +105,24 @@ export interface Theme {
   background: ThemeBackground;
   /** Hide the "Made with Kork" footer link; honored only on Pro. */
   hide_branding?: boolean;
+  /** Uploaded fonts (Pro); `font` is the fallback. */
+  font_uploads?: FontUploads;
+}
+
+/** Upload IDs of fonts from POST /api/uploads/font. */
+export interface FontUploads {
+  body?: string;
+  display?: string;
+}
+
+/** Result of saving custom CSS. */
+export interface CustomCSSResult {
+  /** The sanitized, scoped CSS that was stored. */
+  css: string;
+  /** What the sanitizer removed, each starting with "line N:". */
+  warnings: string[];
+  /** False when the plan doesn't include custom CSS, so the page doesn't show it. */
+  applied: boolean;
 }
 
 export interface ThemePatch {
@@ -116,6 +134,7 @@ export interface ThemePatch {
   layout?: string;
   background?: Partial<ThemeBackground>;
   hide_branding?: boolean;
+  font_uploads?: FontUploads;
 }
 
 export type BlockType =
@@ -218,6 +237,8 @@ export interface Page {
   theme: Theme;
   blocks: Block[];
   domains: Domain[];
+  /** Stored, sanitized custom CSS (Pro). Missing on older servers. */
+  custom_css?: string;
   created_at: string;
   updated_at: string;
 }
@@ -347,7 +368,13 @@ export interface PendingUser {
 
 export type PlanTier = "free" | "pro";
 
-export type PlanFeature = "custom_domains" | "remove_branding" | "custom_css" | "custom_fonts" | "scheduled_links";
+export type PlanFeature =
+  | "custom_domains"
+  | "remove_branding"
+  | "custom_css"
+  | "custom_fonts"
+  | "stats_export"
+  | "scheduled_links";
 
 export interface PlanLimits {
   /** The plan in force now; an expired Pro grant reports "free". */
@@ -531,6 +558,9 @@ export const api = {
   stats: (id: string, days = 30) =>
     request<Stats>("GET", `/api/pages/${enc(id)}/stats?days=${days}`),
   qrUrl: (id: string) => `/api/pages/${enc(id)}/qr.svg`,
+  /** Same-origin CSV download (a plain GET link); Pro. */
+  statsCsvUrl: (id: string, days: number) => `/api/pages/${enc(id)}/stats.csv?days=${days}`,
+  setPageCSS: (id: string, css: string) => request<CustomCSSResult>("PUT", `/api/pages/${enc(id)}/css`, { css }),
 
   // Account
   accountSettings: () => request<AccountSettings>("GET", "/api/account/settings"),
@@ -573,6 +603,11 @@ export const api = {
     const form = new FormData();
     form.append("file", file);
     return request<Upload>("POST", "/api/uploads", form);
+  },
+  uploadFont: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<Upload>("POST", "/api/uploads/font", form);
   },
 
   // Import and link previews (the server fetches the remote page)
