@@ -48,7 +48,7 @@ func Load() (*Config, error) {
 		Addr:         env("ZELDA_ADDR", ":8080"),
 		DatabaseURL:  env("ZELDA_DATABASE_URL", ""),
 		BaseURL:      strings.TrimSuffix(env("ZELDA_BASE_URL", "http://localhost:8080"), "/"),
-		AppName:      env("ZELDA_APP_NAME", "Zelda"),
+		AppName:      env("ZELDA_APP_NAME", "Kork"),
 		UploadDir:    env("ZELDA_UPLOAD_DIR", "./data/uploads"),
 		DomainTarget: env("ZELDA_DOMAIN_TARGET", ""),
 		TrustProxy:   env("ZELDA_TRUST_PROXY", "false") == "true",

@@ -1,15 +1,15 @@
-export function Logo({ size = 26 }: { size?: number }) {
+// Kork mark: a pinned paper card. Artwork from the Kork brand pack in subcult-studio.
+export function Logo({ size = 28 }: { size?: number }) {
   return (
-    <svg className="logo" width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-      <rect width="32" height="32" rx="9" fill="var(--accent)" />
-      <path
-        d="M10 10.5h12L10 21.5h12"
-        stroke="var(--accent-contrast)"
-        strokeWidth="3"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg className="logo" width={size} height={size} viewBox="0 0 160 160" aria-hidden="true">
+      <g transform="rotate(-7 80 88)">
+        <rect x="29" y="40" width="112" height="108" rx="10" fill="#1b130c" opacity=".28" />
+        <rect x="22" y="32" width="112" height="108" rx="10" fill="#fbf6ec" stroke="#1b130c" strokeWidth="7" />
+        <rect x="42" y="74" width="72" height="15" rx="7.5" fill="#1b130c" />
+        <rect x="42" y="100" width="48" height="15" rx="7.5" fill="#1b130c" />
+      </g>
+      <circle cx="80" cy="32" r="19" fill="#2340e8" />
+      <circle cx="73.5" cy="25.5" r="6" fill="#fbf6ec" />
     </svg>
   );
 }

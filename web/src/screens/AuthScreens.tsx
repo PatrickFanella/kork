@@ -11,9 +11,9 @@ function AuthLayout({ title, subtitle, children, footer }: { title: string; subt
   return (
     <main className="auth-page">
       <div className="auth-card">
-        <Link to="/" className="auth-brand" aria-label="Zelda home">
+        <Link to="/" className="auth-brand" aria-label="Kork home">
           <Logo size={34} />
-          <span>Zelda</span>
+          <span>kork</span>
         </Link>
         <h1>{title}</h1>
         {subtitle && <p className="auth-subtitle">{subtitle}</p>}

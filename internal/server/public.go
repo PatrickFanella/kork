@@ -20,13 +20,13 @@ const frameSources = "https://www.youtube-nocookie.com https://player.vimeo.com 
 
 func (s *Server) handleLanding(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = render.WriteSimple(w, render.Simple{AppName: s.cfg.AppName, Title: s.cfg.AppName + ": themed link pages", Landing: true})
+	_ = render.WriteSimple(w, render.Simple{AppName: s.cfg.AppName, BaseURL: s.cfg.BaseURL, Title: s.cfg.AppName + ": every link, one board", Landing: true})
 }
 
 func (s *Server) notFoundPage(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusNotFound)
-	_ = render.WriteSimple(w, render.Simple{AppName: s.cfg.AppName, Title: "Not found",
+	_ = render.WriteSimple(w, render.Simple{AppName: s.cfg.AppName, BaseURL: s.cfg.BaseURL, Title: "Not found",
 		Heading: "Nothing here", Message: "This page doesn't exist or isn't public."})
 }
 

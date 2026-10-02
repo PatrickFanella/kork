@@ -16,9 +16,9 @@ export function AppShell() {
         Skip to content
       </a>
       <header className="topbar">
-        <Link to="/" className="brand" aria-label="Zelda, your pages">
+        <Link to="/" className="brand" aria-label="Kork, your pages">
           <Logo />
-          <span>Zelda</span>
+          <span>kork</span>
         </Link>
         <nav className="topnav" aria-label="Main">
           <NavLink to="/" end>

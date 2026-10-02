@@ -3,30 +3,53 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#d4a56c">
 <title>{{.Title}}</title>
-<meta name="description" content="{{.AppName}} builds themed link pages: socials, payments, QR codes and more on one page.">
+<meta name="description" content="{{.AppName}} builds link pages for creators: socials, payments, QR codes and more, pinned to one page.">
+<link rel="icon" href="/static/brand/favicon.svg?v={{.AssetVersion}}" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/brand/apple-touch-icon.png?v={{.AssetVersion}}">
+{{if .Landing}}
+<meta property="og:type" content="website">
+<meta property="og:title" content="{{.AppName}}: every link, one board">
+<meta property="og:description" content="Socials, payments, QR codes and more on one page.">
+<meta property="og:url" content="{{.BaseURL}}/">
+<meta property="og:image" content="{{.BaseURL}}/static/brand/og.png">
+<meta name="twitter:card" content="summary_large_image">
+{{end}}
 <link rel="stylesheet" href="/static/site.css?v={{.AssetVersion}}">
 </head>
 <body>
+<header class="topbar">
+  <a class="brand" href="/"><img src="/static/brand/favicon.svg?v={{.AssetVersion}}" alt="" width="36" height="36"><span>{{.AppName}}</span></a>
+  <nav><a href="/app/login">Log in</a></nav>
+</header>
 <main class="site">
-  <p class="brand"><a href="/">{{.AppName}}</a></p>
   {{if .Landing}}
-  <h1>Every link you share, on one themed page.</h1>
-  <p class="lede">Socials, Cash App, PayPal, Venmo, crypto addresses, QR codes, music and video embeds, a contact card. Pick a theme, publish at your own name or your own domain.</p>
-  <p class="actions"><a class="cta" href="/app/signup">Make your page</a> <a href="/app/login">Log in</a></p>
+  <section class="hero">
+    <div>
+      <p class="kicker">LINK PAGES / BY SUBCULT</p>
+      <h1>Every link.<br>One board.</h1>
+      <p class="lede">Pin your socials, Cash App, PayPal, Venmo, crypto addresses, QR codes, music and video players and a contact card to one page. Pick a theme and share one link.</p>
+      <p class="actions"><a class="cta" href="/app/signup">Make your page</a> <a class="quiet" href="/app/login">Log in</a></p>
+    </div>
+    <img class="hero-art" src="/static/brand/hero.svg?v={{.AssetVersion}}" alt="Paper cards pinned to cork: @yourname, $yourname and a QR code" width="540" height="310">
+  </section>
   <ul class="features">
-    <li><strong>{{.ServiceCount}} services</strong> with icons and handle checks</li>
-    <li><strong>Payments</strong>: Cash App, PayPal, Venmo, Ko-fi, Zelle, Bitcoin and more</li>
-    <li><strong>QR codes</strong> for the whole page or any single link</li>
-    <li><strong>Custom domains</strong> with automatic HTTPS</li>
-    <li><strong>No trackers</strong>: counts are anonymous daily totals</li>
+    <li><strong>{{.ServiceCount}} services</strong>Instagram to Bandcamp, with icons and handle checks.</li>
+    <li><strong>Payments and tips</strong>Cash App, PayPal, Venmo, Ko-fi, Zelle, Bitcoin and more.</li>
+    <li><strong>QR codes</strong>For the whole page or any single link.</li>
+    <li><strong>Themes</strong>Ten presets, your own colors, fonts and backgrounds.</li>
+    <li><strong>No trackers</strong>Visit counts are anonymous daily totals.</li>
   </ul>
   {{else}}
-  <h1>{{.Heading}}</h1>
-  <p class="lede">{{.Message}}</p>
-  <p class="actions"><a href="/">Go home</a></p>
+  <section class="message">
+    <h1>{{.Heading}}</h1>
+    <p class="lede">{{.Message}}</p>
+    <p class="actions"><a class="cta" href="/">Go home</a></p>
+  </section>
   {{end}}
 </main>
+<footer class="site-footer"><span>{{.AppName}} is made by <a href="https://subcult.tv/">SUBCULT</a>.</span></footer>
 </body>
 </html>
 {{end}}

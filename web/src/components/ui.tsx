@@ -415,7 +415,7 @@ export function useDebounced<T>(value: T, ms: number): T {
 
 export function useDocumentTitle(title: string) {
   useEffect(() => {
-    document.title = title ? `${title} · Zelda` : "Zelda";
+    document.title = title ? `${title} · Kork` : "Kork";
   }, [title]);
 }
 

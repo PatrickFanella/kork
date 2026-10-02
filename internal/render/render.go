@@ -107,6 +107,7 @@ func WritePage(w io.Writer, p Page, bgImage string) error {
 // Simple is the input to the landing and error template.
 type Simple struct {
 	AppName      string
+	BaseURL      string
 	Title        string
 	Heading      string
 	Message      string

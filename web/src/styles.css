@@ -1,23 +1,23 @@
-/* Zelda editor: neutral app chrome. The user's theme only appears in the preview. */
+/* Kork editor: warm paper chrome with cobalt actions (Kork brand pack). The user's theme only appears in the preview. */
 
 :root {
   color-scheme: light dark;
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 
-  --bg: #f6f6f7;
-  --surface: #ffffff;
-  --surface-2: #f1f1f3;
-  --surface-3: #e9e9ec;
-  --border: #e2e2e6;
-  --border-strong: #cfcfd5;
-  --text: #17171c;
-  --muted: #62626d;
-  --faint: #8d8d97;
-  --accent: #5a54d6;
-  --accent-hover: #4b45c4;
-  --accent-soft: #ecebfc;
-  --accent-text: #4740c0;
+  --bg: #f5efe4;
+  --surface: #fffdf8;
+  --surface-2: #f2ebde;
+  --surface-3: #e8dfcf;
+  --border: #e3d8c5;
+  --border-strong: #cbbda4;
+  --text: #1b130c;
+  --muted: #6b5c4b;
+  --faint: #8f7f6c;
+  --accent: #2340e8;
+  --accent-hover: #1b33c4;
+  --accent-soft: #e5e9fd;
+  --accent-text: #1d34c4;
   --accent-contrast: #ffffff;
   --danger: #c9302c;
   --danger-soft: #fdecec;
@@ -37,20 +37,20 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0e0e11;
-    --surface: #17171b;
-    --surface-2: #1e1e23;
-    --surface-3: #27272d;
-    --border: #2a2a31;
-    --border-strong: #3a3a43;
-    --text: #ececf0;
-    --muted: #a3a3ae;
-    --faint: #75757f;
-    --accent: #7b75f0;
-    --accent-hover: #8d88f4;
-    --accent-soft: #24233d;
-    --accent-text: #aeaaff;
-    --accent-contrast: #0f0e1f;
+    --bg: #14100c;
+    --surface: #1c1712;
+    --surface-2: #241e17;
+    --surface-3: #2e261d;
+    --border: #33291f;
+    --border-strong: #45382a;
+    --text: #f3ece0;
+    --muted: #b4a690;
+    --faint: #85776a;
+    --accent: #7088ff;
+    --accent-hover: #8a9dff;
+    --accent-soft: #1d2346;
+    --accent-text: #a9b7ff;
+    --accent-contrast: #0b0f2a;
     --danger: #f2706b;
     --danger-soft: #3a1b1c;
     --success: #4cc68a;
@@ -852,7 +852,7 @@ main:focus {
   padding: 32px 16px;
   gap: 16px;
   background:
-    radial-gradient(900px 400px at 50% -10%, color-mix(in srgb, var(--accent) 12%, transparent), transparent),
+    radial-gradient(900px 400px at 50% -10%, color-mix(in srgb, #d4a56c 38%, transparent), transparent),
     var(--bg);
 }
 .auth-card {
@@ -2088,3 +2088,7 @@ a.editor-url:hover {
   width: 56%;
   height: 56%;
 }
+
+/* Kork wordmark */
+@font-face { font-family: "Archivo Black"; src: url(/static/brand/ArchivoBlack-Regular.ttf) format("truetype"); font-display: swap; }
+.brand span, .auth-brand span { font-family: "Archivo Black", "Arial Black", sans-serif; font-weight: 400; letter-spacing: -0.01em; text-transform: lowercase; }

@@ -1,6 +1,6 @@
-# Zelda
+# Kork
 
-Self-serve themed link pages. People sign up, add their socials, payment handles, crypto addresses, QR codes, embeds and contact card, pick a theme, and publish at `/{name}` or on their own domain.
+Kork (code name `zelda`) is a self-serve themed link-page service by SUBCULT. People sign up, add their socials, payment handles, crypto addresses, QR codes, embeds and contact card, pick a theme, and publish at `/{name}` or on their own domain.
 
 - **Go API + server-rendered pages.** Public pages are plain HTML and CSS with one small script for copy buttons, sharing and click counts. No React or third-party requests on visitor pages, apart from embeds a page owner adds.
 - **React editor** (`web/`) at `/app`, built into the Go binary.
@@ -87,6 +87,10 @@ The `.env` file is not backed up; recreate it from `.env.example` (a new `POSTGR
 - Per-IP and per-account rate limits on signup, login, mail, uploads, reports and click beacons (in-process, so run one replica).
 - Reserved names (`admin`, `api`, `support`…), URL scheme allowlist, image-only uploads checked by content (no SVG), strict CSP on public pages.
 - Visitors can report a page; admins see reports in the editor and can suspend pages or accounts.
+
+## Brand
+
+The Kork identity lives in subcult-studio (`branding/2026-10-01-packs/brands/kork`). The web copies in `internal/render/static/brand/` come from that pack; see `SOURCE.txt` there. The landing page, editor chrome and favicon use it; user pages keep their own themes. The server name comes from `ZELDA_APP_NAME` (default `Kork`).
 
 ## Layout
 

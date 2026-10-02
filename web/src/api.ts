@@ -1,4 +1,4 @@
-// Typed client for the Zelda JSON API. See docs/api.md for the contract.
+// Typed client for the Kork (code name zelda) JSON API. See docs/api.md for the contract.
 
 export interface User {
   id: string;
