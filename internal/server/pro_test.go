@@ -156,7 +156,7 @@ func TestCustomCSSAndFonts(t *testing.T) {
 	if code := bob.do("PUT", "/api/pages/"+pageID+"/css", map[string]any{"css": hostile}, &cr); code != 200 || !cr.Applied {
 		t.Fatalf("set css: %d %+v", code, cr)
 	}
-	if !strings.Contains(cr.CSS, `body.kork-page{background:url("/u/`+imgID+`")}`) || !strings.Contains(cr.CSS, "body.kork-page .btn{color:red}") ||
+	if !strings.Contains(cr.CSS, `body.kork-page main.page{background:url("/u/`+imgID+`")}`) || !strings.Contains(cr.CSS, "body.kork-page main.page .btn{color:red}") ||
 		strings.Contains(cr.CSS, eveImg) || strings.Contains(cr.CSS, "evil.example") || strings.Contains(cr.CSS, "</") {
 		t.Fatalf("sanitized css: %q", cr.CSS)
 	}
@@ -183,11 +183,15 @@ func TestCustomCSSAndFonts(t *testing.T) {
 
 	// Rendering while entitled.
 	style, html, csp := publicStyle(t, anon, "bobpage")
-	if !strings.Contains(style, "body.kork-page .btn{color:red}") ||
+	if !strings.Contains(style, "body.kork-page main.page .btn{color:red}") ||
 		!strings.Contains(style, `@font-face{font-family:"kork-body";src:url("/u/`+fontID+`");font-display:swap}`) ||
 		!strings.Contains(style, `@font-face{font-family:"kork-display"`) || !strings.Contains(style, `--font:"kork-body", `) ||
 		!strings.Contains(style, `--font-display:"kork-display"`) {
 		t.Fatalf("pro style: %s", style)
+	}
+	// Custom CSS is scoped to <main>; the footer with Report must sit outside it.
+	if mainEnd, footer := strings.Index(html, "</main>"), strings.Index(html, `id="page-footer"`); mainEnd < 0 || footer < mainEnd {
+		t.Fatalf("footer must follow </main> so custom CSS can't reach Report: main end %d, footer %d", mainEnd, footer)
 	}
 	if !strings.Contains(html, `<body class="kork-page `) || strings.Contains(html, "<script>alert") {
 		t.Fatalf("pro html: %s", html)
@@ -203,7 +207,7 @@ func TestCustomCSSAndFonts(t *testing.T) {
 		t.Fatal(err)
 	}
 	style, html, _ = publicStyle(t, anon, "bobpage")
-	if !strings.Contains(style, "body.kork-page .q{color:blue}") || strings.Contains(html, "<script>alert(3)") {
+	if !strings.Contains(style, "body.kork-page main.page .q{color:blue}") || strings.Contains(html, "<script>alert(3)") {
 		t.Fatalf("stored css re-sanitized: %s", style)
 	}
 	if code := bob.do("PUT", "/api/pages/"+pageID+"/css", map[string]any{"css": ".btn{color:red}"}, &cr); code != 200 {
@@ -218,7 +222,7 @@ func TestCustomCSSAndFonts(t *testing.T) {
 		t.Fatalf("free style still has pro parts: %s", style)
 	}
 	bob.do("GET", "/api/pages/"+pageID, nil, &pg)
-	if pg.CustomCSS != "body.kork-page .btn{color:red}" || pg.Theme.FontUploads["body"] != fontID {
+	if pg.CustomCSS != "body.kork-page main.page .btn{color:red}" || pg.Theme.FontUploads["body"] != fontID {
 		t.Fatalf("stored after downgrade: %+v", pg)
 	}
 	// Other theme changes still save with the stored fonts; new fonts need Pro.

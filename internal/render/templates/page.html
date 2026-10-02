@@ -63,7 +63,8 @@
   {{- end}}
   </ol>
 
-  <footer class="page-footer">
+</main>
+  <footer class="page-footer" id="page-footer">
     <button type="button" class="link-button" data-share="{{.CanonicalURL}}" data-title="{{.Title}}">Share</button>
     <span aria-hidden="true">·</span>
     <button type="button" class="link-button" data-report>Report</button>
@@ -76,7 +77,6 @@
     <span aria-hidden="true">·</span>
     <a href="{{.BaseURL}}/privacy">Privacy</a>
   </footer>
-</main>
 
 <dialog id="report-dialog" aria-labelledby="report-title">
   <form id="report-form" data-slug="{{.Slug}}">

@@ -13,10 +13,11 @@ const MaxInput = 20 << 10
 // because of scoping prefixes and escapes.
 const MaxOutput = 64 << 10
 
-// Scope is the selector every rule is placed under. The public page's body
-// carries the kork-page class; page chrome outside the body (the document
-// root) cannot be selected.
-const Scope = "body.kork-page"
+// Scope is the selector every rule is placed under: the page's <main>.
+// Everything outside it (the footer with its Report link, the report dialog,
+// the document root) cannot be selected, so custom CSS can't hide or cover
+// the ways visitors report a page. html, body and :root map to Scope itself.
+const Scope = "body.kork-page main.page"
 
 // maxWarnings caps the warnings returned for one sanitize call.
 const maxWarnings = 50
@@ -235,6 +236,11 @@ func scopeSelector(prelude []node) string {
 }
 
 func scopeOne(sel []node) string {
+	// Already scoped: sanitized CSS is sanitized again when rendered.
+	if out := serialize(sel); out == Scope || strings.HasPrefix(out, Scope+" ") ||
+		strings.HasPrefix(out, Scope+":") || strings.HasPrefix(out, Scope+".") || strings.HasPrefix(out, Scope+"[") {
+		return out
+	}
 	isIdent := func(i int, v string) bool {
 		return i < len(sel) && sel[i].tok.kind == tIdent && strings.EqualFold(sel[i].tok.value, v)
 	}
@@ -248,10 +254,6 @@ func scopeOne(sel []node) string {
 		}
 	case isIdent(0, "body"):
 		rest = 1
-		// Already scoped (sanitized CSS is sanitized again when rendered).
-		if len(sel) > 2 && isDelim(sel[1].tok, ".") && sel[2].tok.kind == tIdent && sel[2].tok.value == "kork-page" {
-			rest = 3
-		}
 	case len(sel) > 1 && sel[0].tok.kind == tColon && isIdent(1, "root"):
 		rest = 2
 	}
@@ -259,7 +261,7 @@ func scopeOne(sel []node) string {
 		return Scope + " " + serialize(sel)
 	}
 	// The tail continues the compound selector ("body.dark") or starts with
-	// a combinator or whitespace ("body > main").
+	// a combinator or whitespace ("body > ol").
 	return Scope + serialize(sel[rest:])
 }
 

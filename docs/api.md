@@ -161,7 +161,7 @@ Slugs: 3–32 chars, `[a-z0-9][a-z0-9-_]*`, some reserved. The page limit depend
 `PUT /api/pages/{id}/css` with `{"css": "..."}` sanitizes the CSS, stores the result on the page and returns:
 
 ```json
-{"css": "body.kork-page .btn{letter-spacing:.02em}", "warnings": ["line 3: @import is not allowed"], "applied": true}
+{"css": "body.kork-page main.page .btn{letter-spacing:.02em}", "warnings": ["line 3: @import is not allowed"], "applied": true}
 ```
 
 - Input is limited to 20 KB (`422 too_large`, `field: "css"`). A sanitized result over 64 KB is also rejected.
@@ -187,7 +187,7 @@ It removes:
 
 The output can't close the `<style>` element. Identifiers and strings are written with `<`, `>`, `&`, quotes, backslashes and control characters hex-escaped. A `<` delimiter, which media range syntax uses, is always followed by `=` or a space. As a last check, output containing `</`, `<!--` or `-->` is discarded.
 
-Scoping: each selector is prefixed with `body.kork-page `, and the public page's `<body>` has that class. A leading `html`, `body`, `html body` or `:root` is replaced by `body.kork-page`. So `body { background: #000 }` styles the page background, `:root { --accent: red }` overrides theme variables, and `.btn` styles the buttons. The prefix adds specificity (one class and one type), so custom rules override the page stylesheet without `!important`. This approach was chosen over CSS nesting because it works in every browser and needs no nesting-aware parsing. Rules can't reach outside the body. Inside it, though, custom CSS can restyle or hide anything, including the footer's Report link.
+Scoping: each selector is prefixed with `body.kork-page main.page `. A leading `html`, `body`, `html body` or `:root` is replaced by `body.kork-page main.page`, so `body { background: #000 }` styles the page column, `:root { --accent: red }` overrides theme variables there, and `.btn` styles the buttons. The prefix adds specificity, so custom rules override the page stylesheet without `!important`. Rules can only reach elements inside `<main>`. The footer (Share, Report, Terms, Privacy) and the report dialog sit after `<main>` and are pinned visible above it, so custom CSS can't hide or cover the Report link. A prefix was chosen over CSS nesting because it works in every browser.
 
 Public pages put the CSS in the page's nonce'd `<style>` element, after the theme variables and font rules, so the CSP still allows only nonce'd inline styles. The stored CSS is sanitized again on every render, with URL ownership not rechecked, so CSS saved under an older sanitizer is still checked.
 

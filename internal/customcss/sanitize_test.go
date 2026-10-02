@@ -33,26 +33,26 @@ func assertSafe(t *testing.T, src string, r Result) {
 
 func TestSanitizeKeepsOrdinaryCSS(t *testing.T) {
 	cases := []struct{ in, want string }{
-		{`.btn { color: red; border-radius: 4px }`, `body.kork-page .btn{color:red;border-radius:4px}`},
+		{`.btn { color: red; border-radius: 4px }`, `body.kork-page main.page .btn{color:red;border-radius:4px}`},
 		{`a:hover, h1 > small { text-decoration: underline !important }`,
-			`body.kork-page a:hover,body.kork-page h1 > small{text-decoration:underline !important}`},
-		{`body { background: #000 }`, `body.kork-page{background:#000}`},
-		{`body.dark p { color: white }`, `body.kork-page.dark p{color:white}`},
-		{`html body .page { max-width: 40rem }`, `body.kork-page .page{max-width:40rem}`},
-		{`:root { --accent: #ff00aa }`, `body.kork-page{--accent:#ff00aa}`},
-		{`* { margin: 0 }`, `body.kork-page *{margin:0}`},
+			`body.kork-page main.page a:hover,body.kork-page main.page h1 > small{text-decoration:underline !important}`},
+		{`body { background: #000 }`, `body.kork-page main.page{background:#000}`},
+		{`body.dark p { color: white }`, `body.kork-page main.page.dark p{color:white}`},
+		{`html body .page { max-width: 40rem }`, `body.kork-page main.page .page{max-width:40rem}`},
+		{`:root { --accent: #ff00aa }`, `body.kork-page main.page{--accent:#ff00aa}`},
+		{`* { margin: 0 }`, `body.kork-page main.page *{margin:0}`},
 		{`.btn { background: linear-gradient(90deg, rgb(0 0 0 / 50%), var(--accent)) }`,
-			`body.kork-page .btn{background:linear-gradient(90deg, rgb(0 0 0 / 50%), var(--accent))}`},
-		{`@media (max-width: 600px) { .page { padding: 0 } }`, `@media (max-width: 600px){body.kork-page .page{padding:0}}`},
-		{`@supports (display: grid) { .blocks { display: grid } }`, `@supports (display: grid){body.kork-page .blocks{display:grid}}`},
+			`body.kork-page main.page .btn{background:linear-gradient(90deg, rgb(0 0 0 / 50%), var(--accent))}`},
+		{`@media (max-width: 600px) { .page { padding: 0 } }`, `@media (max-width: 600px){body.kork-page main.page .page{padding:0}}`},
+		{`@supports (display: grid) { .blocks { display: grid } }`, `@supports (display: grid){body.kork-page main.page .blocks{display:grid}}`},
 		{`@keyframes pulse { from { opacity: 1 } 50% { opacity: .5 } to { opacity: 1 } }`,
 			`@keyframes pulse{from{opacity:1}50%{opacity:.5}to{opacity:1}}`},
-		{`.avatar { background: url(/u/` + ownID + `) }`, `body.kork-page .avatar{background:url("/u/` + ownID + `")}`},
-		{`.x { background: url("/u/` + ownID + `") }`, `body.kork-page .x{background:url("/u/` + ownID + `")}`},
+		{`.avatar { background: url(/u/` + ownID + `) }`, `body.kork-page main.page .avatar{background:url("/u/` + ownID + `")}`},
+		{`.x { background: url("/u/` + ownID + `") }`, `body.kork-page main.page .x{background:url("/u/` + ownID + `")}`},
 		{`@font-face { font-family: Mine; src: url(/u/` + ownID + `) format("woff2"); font-display: swap }`,
 			`@font-face{font-family:Mine;src:url("/u/` + ownID + `") format("woff2");font-display:swap}`},
-		{`.q::before { content: "a \"quoted\" <b>" }`, `body.kork-page .q::before{content:"a \22 quoted\22  \3c b\3e "}`},
-		{`h1{font-size:2em}/* trailing comment`, `body.kork-page h1{font-size:2em}`},
+		{`.q::before { content: "a \"quoted\" <b>" }`, `body.kork-page main.page .q::before{content:"a \22 quoted\22  \3c b\3e "}`},
+		{`h1{font-size:2em}/* trailing comment`, `body.kork-page main.page h1{font-size:2em}`},
 	}
 	for _, c := range cases {
 		r := sanitize(c.in)
@@ -160,7 +160,7 @@ func TestSanitizeWarnsWithLines(t *testing.T) {
 	if len(r.Warnings) != 2 || !strings.HasPrefix(r.Warnings[0], "line 2:") || !strings.HasPrefix(r.Warnings[1], "line 3:") {
 		t.Fatalf("warnings: %v", r.Warnings)
 	}
-	if r.CSS != "body.kork-page .a{color:red}" {
+	if r.CSS != "body.kork-page main.page .a{color:red}" {
 		t.Fatalf("css: %q", r.CSS)
 	}
 }
@@ -175,5 +175,27 @@ func TestSanitizeDeepNesting(t *testing.T) {
 func TestSanitizeEmpty(t *testing.T) {
 	if r := sanitize("  \n "); r.CSS != "" || len(r.Warnings) != 0 {
 		t.Fatalf("empty: %+v", r)
+	}
+}
+
+func TestScopeCannotReachOutsideMain(t *testing.T) {
+	for _, in := range []string{
+		"footer { display: none }",
+		"html, body { opacity: 0 }",
+		":root ~ footer { display: none }",
+		"body > footer { visibility: hidden }",
+		"* { display: none }",
+	} {
+		out := Sanitize(in, nil).CSS
+		for _, rule := range strings.Split(out, "}") {
+			if rule == "" {
+				continue
+			}
+			for _, sel := range strings.Split(strings.SplitN(rule, "{", 2)[0], ",") {
+				if !strings.HasPrefix(strings.TrimSpace(sel), Scope) {
+					t.Errorf("Sanitize(%q): selector %q escapes %q", in, sel, Scope)
+				}
+			}
+		}
 	}
 }

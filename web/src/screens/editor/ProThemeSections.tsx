@@ -188,8 +188,9 @@ export function CustomCSSSection({ page, setPage, saved }: EditorProps) {
     <section className="card section" aria-labelledby={`${id}-heading`}>
       <h2 id={`${id}-heading`}>Custom CSS {!allowed && <ProBadge />}</h2>
       <p className="muted small" id={`${id}-help`}>
-        Your rules apply only to this page: each selector is placed under <code>body.kork-page</code>, so{" "}
-        <code>.btn</code> styles your buttons and <code>body</code> styles the page background. <code>url()</code> can
+        Your rules apply only to this page's content: each selector is placed under{" "}
+        <code>body.kork-page main.page</code>, so <code>.btn</code> styles your buttons and <code>body</code> styles the
+        page column. The footer with Share and Report can't be changed. <code>url()</code> can
         only use files you uploaded (<code>/u/…</code>). @import, remote addresses and nested rules are removed. Up to 20
         KB.
       </p>
