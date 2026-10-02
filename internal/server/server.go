@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"git.subcult.tv/subculture-collective/zelda/internal/config"
+	"git.subcult.tv/subculture-collective/zelda/internal/fetch"
 	"git.subcult.tv/subculture-collective/zelda/internal/mail"
 	"git.subcult.tv/subculture-collective/zelda/internal/render"
 	"git.subcult.tv/subculture-collective/zelda/internal/store"
@@ -38,6 +39,7 @@ type Server struct {
 	log      *slog.Logger
 	resolver Resolver
 	editor   fs.FS // built SPA (web/dist)
+	fetcher  *fetch.Client
 
 	signupLimit  *limiter
 	loginIPLimit *limiter
@@ -47,6 +49,8 @@ type Server struct {
 	trackLimit   *limiter
 	uploadLimit  *limiter
 	verifyLimit  *limiter
+	importLimit  *limiter
+	previewLimit *limiter
 }
 
 // New builds a server. editor may be nil when the SPA has not been built.
@@ -64,6 +68,9 @@ func New(cfg *config.Config, st *store.Store, sender mail.Sender, log *slog.Logg
 		trackLimit:   newLimiter(120, time.Minute),
 		uploadLimit:  newLimiter(60, time.Hour),
 		verifyLimit:  newLimiter(20, time.Hour),
+		importLimit:  newLimiter(20, time.Hour),
+		previewLimit: newLimiter(60, time.Hour),
+		fetcher:      fetch.New(fetch.Options{}),
 	}
 }
 
@@ -119,6 +126,11 @@ func (s *Server) mainRoutes() *http.ServeMux {
 	m.HandleFunc("POST /api/pages/{id}/domains/{domainID}/verify", s.api(s.authed(s.handleVerifyDomain)))
 	m.HandleFunc("DELETE /api/pages/{id}/domains/{domainID}", s.api(s.authed(s.handleDeleteDomain)))
 	m.HandleFunc("POST /api/uploads", s.api(s.authed(s.handleUpload)))
+
+	// Outbound fetching: link-page import and link previews
+	m.HandleFunc("POST /api/import/preview", s.api(s.authed(s.handleImportPreview)))
+	m.HandleFunc("POST /api/import/image", s.api(s.authed(s.handleImportImage)))
+	m.HandleFunc("POST /api/link-preview", s.api(s.authed(s.handleLinkPreview)))
 
 	// Reports and admin
 	m.HandleFunc("POST /api/report", s.api(s.handleReport))
