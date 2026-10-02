@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"git.subcult.tv/subculture-collective/zelda/internal/fonts"
 	"git.subcult.tv/subculture-collective/zelda/internal/plans"
 	"git.subcult.tv/subculture-collective/zelda/internal/store"
 )
@@ -84,6 +85,11 @@ func (s *Server) handleServeUpload(w http.ResponseWriter, r *http.Request) {
 	h.Set("Content-Type", up.ContentType)
 	h.Set("Cache-Control", "public, max-age=31536000, immutable")
 	h.Set("Content-Security-Policy", "default-src 'none'; sandbox")
+	if fonts.IsFont(up.ContentType) {
+		// Fonts load only from pages on the same host: no CORS header, and
+		// other sites can't embed them.
+		h.Set("Cross-Origin-Resource-Policy", "same-origin")
+	}
 	http.ServeContent(w, r, "", time.Time{}, f)
 }
 

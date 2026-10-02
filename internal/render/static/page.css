@@ -37,6 +37,7 @@ body.bg-image .page { background: color-mix(in srgb, var(--bg) 82%, transparent)
 
 .profile { margin-bottom: 2rem; text-align: center; }
 .avatar { display: block; width: 96px; height: 96px; margin: 0 auto 1rem; border-radius: 50%; object-fit: cover; background: var(--surface); }
+.profile h1, .item-heading h2 { font-family: var(--font-display, var(--font)); }
 .profile h1 { margin: 0; font-size: clamp(1.6rem, 6vw, 2.2rem); line-height: 1.1; letter-spacing: -.02em; overflow-wrap: anywhere; }
 .profile .bio { margin: .6rem auto 0; max-width: 46ch; color: var(--muted); white-space: pre-line; overflow-wrap: anywhere; }
 

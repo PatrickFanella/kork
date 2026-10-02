@@ -38,13 +38,14 @@ type Feature string
 const (
 	CustomDomains  Feature = "custom_domains"
 	RemoveBranding Feature = "remove_branding" // hide the "Made with Kork" footer link
-	CustomCSS      Feature = "custom_css"      // defined now; implemented in #14
-	CustomFonts    Feature = "custom_fonts"    // font uploads; defined now, implemented in #14
+	CustomCSS      Feature = "custom_css"
+	CustomFonts    Feature = "custom_fonts" // font uploads
+	StatsExport    Feature = "stats_export" // CSV download of stats
 	ScheduledLinks Feature = "scheduled_links"
 )
 
 // Features lists every feature key in display order.
-var Features = []Feature{CustomDomains, RemoveBranding, CustomCSS, CustomFonts, ScheduledLinks}
+var Features = []Feature{CustomDomains, RemoveBranding, CustomCSS, CustomFonts, StatsExport, ScheduledLinks}
 
 // Names are the labels the editor and error messages use.
 var Names = map[Feature]string{
@@ -52,6 +53,7 @@ var Names = map[Feature]string{
 	RemoveBranding: "Hide the footer credit",
 	CustomCSS:      "Custom CSS",
 	CustomFonts:    "Font uploads",
+	StatsExport:    "Stats export",
 	ScheduledLinks: "Scheduled links",
 }
 
@@ -93,6 +95,7 @@ var table = map[Tier]Limits{
 			RemoveBranding: false,
 			CustomCSS:      false,
 			CustomFonts:    false,
+			StatsExport:    false,
 			ScheduledLinks: true,
 		},
 	},
@@ -105,6 +108,7 @@ var table = map[Tier]Limits{
 			RemoveBranding: true,
 			CustomCSS:      true,
 			CustomFonts:    true,
+			StatsExport:    true,
 			ScheduledLinks: true,
 		},
 	},

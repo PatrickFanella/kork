@@ -53,6 +53,10 @@ func upgradeMessage(f plans.Feature) string {
 		return "Custom domains are part of Pro. Upgrade to add one."
 	case plans.RemoveBranding:
 		return "Hiding the footer credit is part of Pro."
+	case plans.CustomFonts:
+		return "Font uploads are part of Pro."
+	case plans.StatsExport:
+		return "Downloading stats as CSV is part of Pro."
 	}
 	return plans.Names[f] + " is part of Pro."
 }

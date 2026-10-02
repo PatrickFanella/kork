@@ -139,6 +139,8 @@ type pageView struct {
 	AvatarURL *string        `json:"avatar_url"`
 	Blocks    []*store.Block `json:"blocks"`
 	Domains   []domainView   `json:"domains"`
+	// CustomCSS is the stored, sanitized custom CSS (Pro).
+	CustomCSS string `json:"custom_css"`
 }
 
 func (s *Server) writePage(w http.ResponseWriter, r *http.Request, status int, p *store.Page) {
@@ -156,6 +158,10 @@ func (s *Server) writePage(w http.ResponseWriter, r *http.Request, status int, p
 		return
 	}
 	v := pageView{Page: p, Theme: themeOf(p), URL: s.pageURL(p.Slug), Blocks: bl, Domains: make([]domainView, 0, len(ds))}
+	if v.CustomCSS, err = s.store.PageCSS(r.Context(), p.ID); err != nil {
+		s.serverErr(w, r, err)
+		return
+	}
 	if p.AvatarUploadID != nil {
 		u := uploadURL(*p.AvatarUploadID)
 		v.AvatarURL = &u
@@ -327,6 +333,9 @@ func (s *Server) handleUpdatePage(w http.ResponseWriter, r *http.Request) {
 		// the stored flag (rendering ignores it), so saving other theme
 		// changes still works.
 		if t.HideBranding && !themeOf(p).HideBranding && !s.requireFeature(w, r, plans.RemoveBranding, "hide_branding") {
+			return
+		}
+		if !s.checkThemeFonts(w, r, t, themeOf(p)) {
 			return
 		}
 		p.Theme, _ = json.Marshal(t)

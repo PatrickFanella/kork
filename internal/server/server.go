@@ -134,6 +134,8 @@ func (s *Server) mainRoutes() *http.ServeMux {
 	m.HandleFunc("DELETE /api/pages/{id}", s.api(s.authed(s.handleDeletePage)))
 	m.HandleFunc("GET /api/pages/{id}/qr.svg", s.api(s.authed(s.handlePageQR)))
 	m.HandleFunc("GET /api/pages/{id}/stats", s.api(s.authed(s.handleStats)))
+	m.HandleFunc("GET /api/pages/{id}/stats.csv", s.api(s.authed(s.handleStatsCSV)))
+	m.HandleFunc("PUT /api/pages/{id}/css", s.api(s.authed(s.handleSetPageCSS)))
 	m.HandleFunc("POST /api/pages/{id}/blocks", s.api(s.authed(s.handleCreateBlock)))
 	m.HandleFunc("PUT /api/pages/{id}/blocks/order", s.api(s.authed(s.handleReorderBlocks)))
 	m.HandleFunc("PATCH /api/pages/{id}/blocks/{blockID}", s.api(s.authed(s.handleUpdateBlock)))
@@ -144,6 +146,7 @@ func (s *Server) mainRoutes() *http.ServeMux {
 	m.HandleFunc("POST /api/pages/{id}/domains/{domainID}/verify", s.api(s.authed(s.handleVerifyDomain)))
 	m.HandleFunc("DELETE /api/pages/{id}/domains/{domainID}", s.api(s.authed(s.handleDeleteDomain)))
 	m.HandleFunc("POST /api/uploads", s.api(s.authed(s.handleUpload)))
+	m.HandleFunc("POST /api/uploads/font", s.api(s.authed(s.handleFontUpload)))
 
 	// Outbound fetching: link-page import and link previews
 	m.HandleFunc("POST /api/import/preview", s.api(s.authed(s.handleImportPreview)))
