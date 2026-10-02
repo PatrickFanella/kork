@@ -369,6 +369,7 @@ input[type="email"],
 input[type="password"],
 input[type="url"],
 input[type="tel"],
+input[type="datetime-local"],
 input[type="search"],
 input:not([type]),
 textarea,
@@ -2092,3 +2093,49 @@ a.editor-url:hover {
 /* Kork wordmark */
 @font-face { font-family: "Archivo Black"; src: url(/static/brand/ArchivoBlack-Regular.ttf) format("truetype"); font-display: swap; }
 .brand span, .auth-brand span { font-family: "Archivo Black", "Arial Black", sans-serif; font-weight: 400; letter-spacing: -0.01em; text-transform: lowercase; }
+
+/* Block schedules */
+.schedule-fields {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.schedule-fields legend {
+  padding: 0;
+  font-weight: 580;
+}
+.schedule-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+.schedule-input {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.schedule-badge {
+  align-self: flex-start;
+  display: inline-block;
+  max-width: 100%;
+  margin-top: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 560;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  background: var(--surface-2);
+}
+.schedule-badge.is-scheduled {
+  color: var(--accent-text);
+  background: var(--accent-soft);
+}
+.schedule-badge.is-expired {
+  color: var(--warning);
+  background: var(--warning-soft);
+}

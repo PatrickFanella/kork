@@ -11,6 +11,14 @@
 
   const preview = location.pathname.startsWith("/preview/");
 
+  // Schedule badges in the owner preview: show times in the viewer's zone.
+  for (const el of document.querySelectorAll("time[data-local-time]")) {
+    const at = new Date(el.dateTime);
+    if (!Number.isNaN(at.getTime())) {
+      el.textContent = at.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+    }
+  }
+
   document.addEventListener("click", async (event) => {
     const tracked = event.target.closest("[data-track]");
     if (tracked && !preview && navigator.sendBeacon) {

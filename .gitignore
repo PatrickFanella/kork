@@ -6,3 +6,4 @@ web/dist/*
 !web/dist/.gitkeep
 scripts/icons/node_modules/
 /backups/
+/.claude/worktrees/

@@ -342,13 +342,14 @@ type Block struct {
 	Enabled  bool            `json:"enabled"`
 	Position int             `json:"position"`
 	Label    string          `json:"label"`
+	Schedule
 }
 
-const blockCols = `id, page_id, type, data, enabled, position`
+const blockCols = `id, page_id, type, data, enabled, position, starts_at, ends_at`
 
 func scanBlock(row pgx.Row) (*Block, error) {
 	var b Block
-	if err := row.Scan(&b.ID, &b.PageID, &b.Type, &b.Data, &b.Enabled, &b.Position); err != nil {
+	if err := row.Scan(&b.ID, &b.PageID, &b.Type, &b.Data, &b.Enabled, &b.Position, &b.StartsAt, &b.EndsAt); err != nil {
 		return nil, notFound(err)
 	}
 	return &b, nil
@@ -375,8 +376,9 @@ func (s *Store) Block(ctx context.Context, pageID, id string) (*Block, error) {
 	return scanBlock(s.pool.QueryRow(ctx, `SELECT `+blockCols+` FROM blocks WHERE page_id = $1 AND id = $2`, pageID, id))
 }
 
-// BlockByID finds a block on a page that is publicly visible.
-func (s *Store) LiveBlock(ctx context.Context, id string) (*Block, *Page, error) {
+// LiveBlock finds a block that visitors can see at now: enabled, inside its
+// schedule window, and on a live page.
+func (s *Store) LiveBlock(ctx context.Context, id string, now time.Time) (*Block, *Page, error) {
 	var pageID string
 	if err := s.pool.QueryRow(ctx, `SELECT page_id FROM blocks WHERE id = $1 AND enabled`, id).Scan(&pageID); err != nil {
 		return nil, nil, notFound(err)
@@ -389,10 +391,16 @@ func (s *Store) LiveBlock(ctx context.Context, id string) (*Block, *Page, error)
 		return nil, nil, ErrNotFound
 	}
 	b, err := s.Block(ctx, pageID, id)
-	return b, p, err
+	if err != nil {
+		return nil, nil, err
+	}
+	if !b.VisibleAt(now) {
+		return nil, nil, ErrNotFound
+	}
+	return b, p, nil
 }
 
-func (s *Store) CreateBlock(ctx context.Context, pageID, typ string, data json.RawMessage, enabled bool) (*Block, error) {
+func (s *Store) CreateBlock(ctx context.Context, pageID, typ string, data json.RawMessage, enabled bool, sched Schedule) (*Block, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -408,8 +416,8 @@ func (s *Store) CreateBlock(ctx context.Context, pageID, typ string, data json.R
 	if n >= MaxBlocks {
 		return nil, ErrLimit
 	}
-	b, err := scanBlock(tx.QueryRow(ctx, `INSERT INTO blocks (page_id, position, type, data, enabled)
-		VALUES ($1, $2, $3, $4, $5) RETURNING `+blockCols, pageID, next, typ, data, enabled))
+	b, err := scanBlock(tx.QueryRow(ctx, `INSERT INTO blocks (page_id, position, type, data, enabled, starts_at, ends_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING `+blockCols, pageID, next, typ, data, enabled, sched.StartsAt, sched.EndsAt))
 	if err != nil {
 		return nil, err
 	}
@@ -420,8 +428,8 @@ func (s *Store) CreateBlock(ctx context.Context, pageID, typ string, data json.R
 }
 
 func (s *Store) UpdateBlock(ctx context.Context, b *Block) error {
-	_, err := s.pool.Exec(ctx, `UPDATE blocks SET data = $3, enabled = $4, updated_at = now() WHERE page_id = $1 AND id = $2`,
-		b.PageID, b.ID, b.Data, b.Enabled)
+	_, err := s.pool.Exec(ctx, `UPDATE blocks SET data = $3, enabled = $4, starts_at = $5, ends_at = $6, updated_at = now()
+		WHERE page_id = $1 AND id = $2`, b.PageID, b.ID, b.Data, b.Enabled, b.StartsAt, b.EndsAt)
 	if err == nil {
 		s.TouchPage(ctx, b.PageID)
 	}
