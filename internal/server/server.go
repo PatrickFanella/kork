@@ -37,7 +37,8 @@ type Server struct {
 	mail     mail.Sender
 	log      *slog.Logger
 	resolver Resolver
-	editor   fs.FS // built SPA (web/dist)
+	editor   fs.FS            // built SPA (web/dist)
+	now      func() time.Time // clock for block schedules; replaced in tests
 
 	signupLimit  *limiter
 	loginIPLimit *limiter
@@ -55,7 +56,7 @@ func New(cfg *config.Config, st *store.Store, sender mail.Sender, log *slog.Logg
 		log.Error("create upload dir", "err", err)
 	}
 	return &Server{
-		cfg: cfg, store: st, mail: sender, log: log, resolver: net.DefaultResolver, editor: editor,
+		cfg: cfg, store: st, mail: sender, log: log, resolver: net.DefaultResolver, editor: editor, now: time.Now,
 		signupLimit:  newLimiter(5, time.Hour),
 		loginIPLimit: newLimiter(30, 15*time.Minute),
 		loginLimit:   newLimiter(10, 15*time.Minute),

@@ -128,14 +128,23 @@ Changing `preset` on PATCH without `colors` resets the colors to that preset.
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| POST | `/api/pages/{id}/blocks` | `{type, data, enabled?}` | `201 Block` (appended) |
-| PATCH | `/api/pages/{id}/blocks/{blockId}` | `{data?, enabled?}` | `200 Block` |
+| POST | `/api/pages/{id}/blocks` | `{type, data, enabled?, starts_at?, ends_at?}` | `201 Block` (appended) |
+| PATCH | `/api/pages/{id}/blocks/{blockId}` | `{data?, enabled?, starts_at?, ends_at?}` | `200 Block` |
 | DELETE | `/api/pages/{id}/blocks/{blockId}` | – | `204` |
 | PUT | `/api/pages/{id}/blocks/order` | `{ids: [uuid, ...]}` (all block IDs) | `204` |
 
-`Block`: `{id, type, data, enabled, position, label}` where `label` is the server's display name for lists.
+`Block`: `{id, type, data, enabled, position, label, starts_at, ends_at}` where `label` is the server's display name for lists and `starts_at`/`ends_at` are RFC 3339 UTC strings or `null`.
 
 Limit 100 blocks per page. Validation errors return `422` with `field` set to the data key.
+
+### Schedules
+
+`starts_at` and `ends_at` set an optional visibility window. Send RFC 3339 times with a zone (`2026-10-02T18:00:00Z` or `2026-10-02T13:00:00-05:00`); the server stores and returns UTC. A block is visible from `starts_at` (inclusive) until `ends_at` (exclusive). A `null` or missing bound is open. On PATCH, an omitted field keeps its value and `null` clears it.
+
+- `ends_at` must be after `starts_at`; otherwise `422` with `field: "ends_at"`. An unparseable time returns `422` with that field.
+- Public pages, click beacons (`/t/{blockId}`) and vCards (`/vcard/{blockId}`) treat a block outside its window like a disabled block. Visibility is computed per request, so no redeploy or edit is needed when a window opens or closes.
+- The owner preview (`/preview/{pageId}`) shows enabled blocks outside their window with a "Scheduled: shows from …" or "Expired …" badge.
+- Public pages send `Cache-Control: public, max-age=60`. When an enabled block starts or ends within the next 60 seconds, `max-age` drops to the whole seconds remaining before that boundary, so cached copies expire by the time the page changes.
 
 ### Block types and `data`
 
