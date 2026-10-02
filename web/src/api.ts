@@ -1,3 +1,4 @@
+import type { BlockSchedule } from "./lib/schedule";
 // Typed client for the Kork (code name zelda) JSON API. See docs/api.md for the contract.
 
 export interface User {
@@ -131,6 +132,9 @@ export interface Block {
   enabled: boolean;
   position: number;
   label: string;
+  /** RFC 3339 UTC; null means no bound. Missing on older servers. */
+  starts_at?: string | null;
+  ends_at?: string | null;
 }
 
 export interface Domain {
@@ -341,9 +345,13 @@ export const api = {
   qrUrl: (id: string) => `/api/pages/${enc(id)}/qr.svg`,
 
   // Blocks
-  createBlock: (pageId: string, type: BlockType, data: BlockData, enabled = true) =>
-    request<Block>("POST", `/api/pages/${enc(pageId)}/blocks`, { type, data, enabled }),
-  updateBlock: (pageId: string, blockId: string, patch: { data?: BlockData; enabled?: boolean }) =>
+  createBlock: (pageId: string, type: BlockType, data: BlockData, enabled = true, schedule?: BlockSchedule) =>
+    request<Block>("POST", `/api/pages/${enc(pageId)}/blocks`, { type, data, enabled, ...schedule }),
+  updateBlock: (
+    pageId: string,
+    blockId: string,
+    patch: { data?: BlockData; enabled?: boolean } & Partial<BlockSchedule>,
+  ) =>
     request<Block>("PATCH", `/api/pages/${enc(pageId)}/blocks/${enc(blockId)}`, patch),
   deleteBlock: (pageId: string, blockId: string) =>
     request<void>("DELETE", `/api/pages/${enc(pageId)}/blocks/${enc(blockId)}`),
