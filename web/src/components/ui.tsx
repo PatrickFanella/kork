@@ -69,7 +69,7 @@ interface TextFieldProps {
   multiline?: boolean;
   rows?: number;
   disabled?: boolean;
-  inputMode?: "text" | "email" | "url" | "tel" | "search";
+  inputMode?: "text" | "email" | "url" | "tel" | "search" | "numeric";
   spellCheck?: boolean;
   status?: ReactNode;
 }
