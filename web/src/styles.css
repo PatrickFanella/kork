@@ -2094,6 +2094,12 @@ a.editor-url:hover {
 @font-face { font-family: "Archivo Black"; src: url(/static/brand/ArchivoBlack-Regular.ttf) format("truetype"); font-display: swap; }
 .brand span, .auth-brand span { font-family: "Archivo Black", "Arial Black", sans-serif; font-weight: 400; letter-spacing: -0.01em; text-transform: lowercase; }
 
+.stats-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
 /* Block schedules */
 .schedule-fields {
   margin: 0;

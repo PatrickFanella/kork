@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"git.subcult.tv/subculture-collective/zelda/internal/analytics"
 	"git.subcult.tv/subculture-collective/zelda/internal/config"
 	"git.subcult.tv/subculture-collective/zelda/internal/db"
 	"git.subcult.tv/subculture-collective/zelda/internal/mail"
@@ -62,7 +63,11 @@ func run(log *slog.Logger) error {
 		}
 	}
 
-	app := server.New(cfg, store.New(pool), sender, log, editor)
+	st := store.New(pool)
+	jobs := &analytics.Jobs{Store: st, Mail: sender, Log: log, BaseURL: cfg.BaseURL, AppName: cfg.AppName,
+		RetentionDays: cfg.StatsRetentionDays}
+	go jobs.Run(ctx, time.Hour)
+	app := server.New(cfg, st, sender, log, editor)
 	if sc := screener(ctx, cfg, log); sc != nil {
 		app.SetScreener(sc)
 		go app.RunRechecks(ctx, 6*time.Hour)

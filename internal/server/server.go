@@ -146,6 +146,10 @@ func (s *Server) mainRoutes() *http.ServeMux {
 	m.HandleFunc("POST /api/admin/users/{id}/suspend", s.api(s.admin(s.handleAdminSuspendUser)))
 	m.HandleFunc("GET /api/admin/users/pending", s.api(s.admin(s.handleAdminPendingUsers)))
 	m.HandleFunc("POST /api/admin/users/{id}/trust", s.api(s.admin(s.handleAdminTrustUser)))
+
+	// Account settings
+	m.HandleFunc("GET /api/account/settings", s.api(s.authed(s.handleGetAccountSettings)))
+	m.HandleFunc("PATCH /api/account/settings", s.api(s.authed(s.handleUpdateAccountSettings)))
 	m.HandleFunc("/api/", s.api(func(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "not_found", "no such endpoint", "")
 	}))
@@ -159,6 +163,8 @@ func (s *Server) mainRoutes() *http.ServeMux {
 	m.HandleFunc("GET /u/{id}", s.handleServeUpload)
 	m.HandleFunc("POST /t/{id}", s.handleTrack)
 	m.HandleFunc("GET /vcard/{id}", s.handleVCard)
+	m.HandleFunc("GET /unsubscribe/weekly-stats", s.handleUnsubscribeWeekly)
+	m.HandleFunc("POST /unsubscribe/weekly-stats", s.handleUnsubscribeWeekly)
 	m.HandleFunc("GET /preview/{id}", s.handlePreview)
 	m.HandleFunc("GET /terms", s.handleTerms)
 	m.HandleFunc("GET /privacy", s.handlePrivacy)

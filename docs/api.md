@@ -10,6 +10,7 @@ The Go service serves everything from one origin:
 | `/{slug}` | Published public page |
 | `POST /t/{blockId}` | Click beacon sent by the public page script (links stay direct so `rel="me"` verification works) |
 | `/vcard/{blockId}` | vCard download for a contact block |
+| `/unsubscribe/weekly-stats?token=...` | Signed one-click unsubscribe from the weekly stats email (GET or POST) |
 | `/u/{uploadId}` | Uploaded image |
 | `/static/*` | Public page CSS/JS |
 | `/terms`, `/privacy` | Terms of service and privacy policy (server-rendered, main host only) |
@@ -110,7 +111,7 @@ Categories: `social, video, music, creator, payment, crypto, contact, web`.
 | DELETE | `/api/pages/{id}` | – | `204` |
 | GET | `/api/slugs/{slug}` | – | `200 {available: bool, reason?: string}` |
 | GET | `/api/pages/{id}/qr.svg` | – | SVG QR code of the public URL |
-| GET | `/api/pages/{id}/stats?days=30` | – | `200 Stats` |
+| GET | `/api/pages/{id}/stats?days=30` | – | `200 Stats`; `days` is 1–30, larger values return 30 |
 
 Slugs: 3–32 chars, `[a-z0-9][a-z0-9-_]*`, some reserved. Limit 5 pages per user.
 
@@ -148,7 +149,37 @@ Slugs: 3–32 chars, `[a-z0-9][a-z0-9-_]*`, some reserved. Limit 5 pages per use
 
 Changing `preset` on PATCH without `colors` resets the colors to that preset.
 
-`Stats`: `{"total_views": 12, "views": [{"day": "2026-10-01", "count": 3}], "blocks": [{"block_id": "uuid", "label": "Instagram", "count": 4}]}`
+`Stats`:
+
+```json
+{
+  "days": 30,
+  "total_views": 12,
+  "views": [{"day": "2026-10-01", "count": 3}],
+  "blocks": [{"block_id": "uuid", "label": "Instagram", "count": 4, "ctr": 0.3333}],
+  "referrers": [{"name": "instagram.com", "count": 7}, {"name": "direct", "count": 5}],
+  "countries": [{"name": "US", "count": 9}, {"name": "unknown", "count": 3}]
+}
+```
+
+- `total_views` and every list cover the last `days` days, ending today (server date).
+- `ctr` is the block's clicks divided by `total_views`, rounded to 4 decimals, and 0 with no views. Views served from a cache are not counted, so it can exceed 1.
+- `referrers`: top 20 by views. The name is the `Referer` host, lowercased, without `www.` or port. `direct` covers no referrer, non-web referrers and links from the same host. After 200 distinct referrers for a page in one day, the rest count as `other`. Referrers apply to page views only.
+- `countries`: top 20 ISO 3166 alpha-2 codes from Cloudflare's `CF-IPCountry` header; missing, `XX` and `T1` (Tor) count as `unknown`.
+- Only daily totals are stored: no IP addresses, cookies or user agents. Rows older than `ZELDA_STATS_RETENTION_DAYS` (default 400) are deleted hourly.
+
+## Account settings
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/api/account/settings` | – | `200 AccountSettings` |
+| PATCH | `/api/account/settings` | any of `AccountSettings` | `200 AccountSettings` |
+
+`AccountSettings`: `{"weekly_stats_email": false}`
+
+Turning `weekly_stats_email` on needs a verified email (`403 {"error":{"code":"email_unverified","field":"weekly_stats_email"}}`). When it is on, a background job emails a summary of the previous Monday–Sunday (UTC) every Monday, at most once per week: views, clicks and click-through per page, plus the top referrers and countries across all the user's pages. The first email is sent in the week after opting in.
+
+Each email links to `GET /unsubscribe/weekly-stats?token=...`, which turns the email off and shows a confirmation page. The token is an HMAC of the user ID with a key stored in the database, and it does not expire. The email also carries `List-Unsubscribe` and `List-Unsubscribe-Post` headers; mail clients' one-click `POST` to the same URL returns `204`. Invalid tokens get `400`.
 
 ## Blocks
 
