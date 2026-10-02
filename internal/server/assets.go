@@ -152,6 +152,14 @@ func (s *Server) handleCreateDomain(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		s.serverErr(w, r, err)
 	default:
+		if err := s.domains.Attach(r.Context(), d); err != nil {
+			// Don't keep a domain the provider doesn't know about.
+			if derr := s.store.DeleteDomain(context.WithoutCancel(r.Context()), d.PageID, d.ID); derr != nil {
+				s.log.Error("remove domain after failed attach", "domain", d.ID, "err", derr)
+			}
+			s.writeDomainErr(w, r, err)
+			return
+		}
 		writeJSON(w, http.StatusCreated, s.domainView(d))
 	}
 }
@@ -177,8 +185,9 @@ func (s *Server) ownedDomain(w http.ResponseWriter, r *http.Request) *store.Doma
 	return d
 }
 
-// handleVerifyDomain checks the TXT ownership record and that the hostname
-// resolves to the same addresses as the service's DNS target.
+// handleVerifyDomain asks the domain provider whether the domain is ready:
+// the TXT and CNAME checks in DNS mode, the custom hostname's state in
+// Cloudflare mode (which answers 200 with status and errors while pending).
 func (s *Server) handleVerifyDomain(w http.ResponseWriter, r *http.Request) {
 	if s.domainsDisabled(w) {
 		return
@@ -204,55 +213,20 @@ func (s *Server) handleVerifyDomain(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusTooManyRequests, "rate_limited", "too many checks; DNS changes can take a while, try again later", "")
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
-	defer cancel()
-	if reason := s.checkDomainDNS(ctx, d); reason != "" {
-		writeErr(w, http.StatusUnprocessableEntity, "dns_not_ready", reason, "")
+	if err := s.domains.Check(r.Context(), d); err != nil {
+		s.writeDomainErr(w, r, err)
 		return
 	}
-	if err := s.store.MarkDomainVerified(r.Context(), d.ID); err != nil {
-		s.serverErr(w, r, err)
-		return
-	}
-	d.Verified = true
 	writeJSON(w, http.StatusOK, s.domainView(d))
-}
-
-func (s *Server) checkDomainDNS(ctx context.Context, d *store.Domain) string {
-	want := "zelda-verify=" + d.VerifyToken
-	txts, err := s.resolver.LookupTXT(ctx, "_zelda."+d.Hostname)
-	found := false
-	for _, t := range txts {
-		if strings.TrimSpace(t) == want {
-			found = true
-		}
-	}
-	if err != nil || !found {
-		return "TXT record _zelda." + d.Hostname + " with value " + want + " not found yet"
-	}
-	got, err := s.resolver.LookupIPAddr(ctx, d.Hostname)
-	if err != nil || len(got) == 0 {
-		return d.Hostname + " doesn't resolve yet; add a CNAME to " + s.cfg.DomainTarget
-	}
-	target, err := s.resolver.LookupIPAddr(ctx, s.cfg.DomainTarget)
-	if err != nil {
-		return "couldn't resolve " + s.cfg.DomainTarget + "; try again shortly"
-	}
-	targets := map[string]bool{}
-	for _, a := range target {
-		targets[a.IP.String()] = true
-	}
-	for _, a := range got {
-		if targets[a.IP.String()] {
-			return ""
-		}
-	}
-	return d.Hostname + " doesn't point at " + s.cfg.DomainTarget + " yet"
 }
 
 func (s *Server) handleDeleteDomain(w http.ResponseWriter, r *http.Request) {
 	d := s.ownedDomain(w, r)
 	if d == nil {
+		return
+	}
+	if err := s.domains.Detach(r.Context(), d); err != nil {
+		s.writeDomainErr(w, r, err)
 		return
 	}
 	if err := s.store.DeleteDomain(r.Context(), d.PageID, d.ID); err != nil {
