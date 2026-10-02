@@ -245,6 +245,56 @@ Setup instructions shown to the user: add the TXT record, point the hostname at 
 
 `POST /api/uploads` multipart field `file`; PNG, JPEG, WebP or GIF, max 5 MB. Response `201 {id, url, content_type, size}`.
 
+## Import and link previews
+
+These endpoints make the server fetch a URL the user supplies. All fetches go through `internal/fetch`:
+
+- Only `http` and `https` on ports 80 and 443; URLs with credentials are refused.
+- Every connection is checked at dial time against the resolved IP. Loopback, private (RFC 1918, IPv6 ULA `fc00::/7`), link-local (including `169.254.169.254` metadata), CGNAT `100.64.0.0/10`, multicast, unspecified, documentation and NAT64/6to4 addresses are refused, so DNS rebinding and redirects to internal hosts fail the same way.
+- At most 5 redirects, each re-checked. 8-second timeout. Pages are capped at 2 MB, images at 5 MB.
+- Requests identify themselves as `KorkBot/1.0 (+https://kork.subcult.tv)`.
+
+A URL without a scheme gets `https://`. Fetch failures return `422` with `field: "url"` and one of these codes: `invalid` (scheme, port or credentials), `blocked_address`, `too_large`, `too_many_redirects`, `fetch_failed` (unreachable, timeout or non-2xx), `not_html`, `unsupported` (image type).
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | `/api/import/preview` | `{url}` | `200 ImportPreview`. Nothing is saved. Limit 20 per user per hour. |
+| POST | `/api/import/image` | `{url}` | `201 {id, url, content_type, size}`: the image copied into an upload owned by the user. Counts against the upload limit (60 per hour). |
+| POST | `/api/link-preview` | `{url}` | `200 LinkPreview`. Limit 60 per user per hour; a stored image also counts against the upload limit. |
+
+`ImportPreview`:
+
+```json
+{
+  "source_url": "https://linktr.ee/alice",
+  "parser": "linktree | generic",
+  "title": "Alice", "bio": "Illustrator.",
+  "avatar_url": "https://remote.example/avatar.png",
+  "items": [
+    {"type": "service", "data": {"service": "instagram", "value": "alice"}, "label": "Instagram"},
+    {"type": "heading", "data": {"text": "Support"}, "label": "Support"},
+    {"type": "link", "data": {"url": "https://example.org/x", "title": "My thing"}, "label": "My thing"}
+  ]
+}
+```
+
+Each item's `data` has already passed block validation, so the editor creates it unchanged with `POST /api/pages/{id}/blocks`. Linktree pages are read from their embedded `__NEXT_DATA__` JSON (anchors if it is missing); any other page contributes its title, description, `og:image` and links to other sites. Links to known services become service blocks: profile URLs on handle services (`instagram.com/alice` → `alice`) and any URL on URL-input services (Spotify, Apple Music). `mailto:` and `tel:` become email and phone blocks. Everything else becomes a link block. At most 100 items. `avatar_url` is a remote address: copy it with `/api/import/image`, then set `avatar_upload_id`. The editor never loads it directly.
+
+`LinkPreview`:
+
+```json
+{
+  "url": "https://example.org/post",
+  "title": "Open Graph or <title> text, ≤ 80 chars",
+  "description": "og:description or meta description, ≤ 120 chars",
+  "thumbnail_upload_id": "uuid (optional)",
+  "thumbnail_url": "/u/uuid (optional)",
+  "image_error": "why the image was skipped (optional)"
+}
+```
+
+The page image (`og:image`, then `twitter:image`) is downloaded and stored as the user's upload after the same byte-sniffed type check as `/api/uploads` (PNG, JPEG, GIF, WebP; never SVG). Pages never hotlink it. The editor offers the title and description as suggestions and applies the thumbnail only when the link has none.
+
 ## Reports and admin
 
 | Method | Path | Body | Response |

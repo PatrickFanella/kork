@@ -92,7 +92,8 @@ Users manage their account at `/app/settings`: change password or email, downloa
 ### Abuse controls
 
 - Email verification before publishing.
-- Per-IP and per-account rate limits on signup, login, mail, uploads, reports and click beacons (in-process, so run one replica).
+- Per-IP and per-account rate limits on signup, login, mail, uploads, imports, link previews, reports and click beacons (in-process, so run one replica).
+- Server-side fetches (link-page import, link previews) refuse private, loopback, link-local and metadata addresses at dial time, allow only ports 80/443, and cap redirects, time and size. Fetched images are stored as uploads, never hotlinked.
 - Reserved names (`admin`, `api`, `support`…), URL scheme allowlist, image-only uploads checked by content (no SVG), strict CSP on public pages.
 - Visitors can report a page; admins see reports in the editor and can suspend pages or accounts.
 - New accounts can publish after `ZELDA_PUBLISH_MIN_ACCOUNT_AGE` (default `24h`, `0` turns it off). Admins can approve an account sooner from the Admin screen. Accounts that existed before this gate was added are trusted.

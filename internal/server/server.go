@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"git.subcult.tv/subculture-collective/zelda/internal/config"
+	"git.subcult.tv/subculture-collective/zelda/internal/fetch"
 	"git.subcult.tv/subculture-collective/zelda/internal/mail"
 	"git.subcult.tv/subculture-collective/zelda/internal/render"
 	"git.subcult.tv/subculture-collective/zelda/internal/screen"
@@ -45,6 +46,7 @@ type Server struct {
 	screener  screen.Screener
 	safeTTL   time.Duration // how long a safe verdict is cached; 0 disables
 	unsafeTTL time.Duration
+	fetcher   *fetch.Client
 
 	signupLimit  *limiter
 	loginIPLimit *limiter
@@ -54,6 +56,8 @@ type Server struct {
 	trackLimit   *limiter
 	uploadLimit  *limiter
 	verifyLimit  *limiter
+	importLimit  *limiter
+	previewLimit *limiter
 	acct         accountLimits
 }
 
@@ -73,6 +77,9 @@ func New(cfg *config.Config, st *store.Store, sender mail.Sender, log *slog.Logg
 		trackLimit:   newLimiter(120, time.Minute),
 		uploadLimit:  newLimiter(60, time.Hour),
 		verifyLimit:  newLimiter(20, time.Hour),
+		importLimit:  newLimiter(20, time.Hour),
+		previewLimit: newLimiter(60, time.Hour),
+		fetcher:      fetch.New(fetch.Options{}),
 		acct:         newAccountLimits(),
 	}
 }
@@ -137,6 +144,11 @@ func (s *Server) mainRoutes() *http.ServeMux {
 	m.HandleFunc("POST /api/pages/{id}/domains/{domainID}/verify", s.api(s.authed(s.handleVerifyDomain)))
 	m.HandleFunc("DELETE /api/pages/{id}/domains/{domainID}", s.api(s.authed(s.handleDeleteDomain)))
 	m.HandleFunc("POST /api/uploads", s.api(s.authed(s.handleUpload)))
+
+	// Outbound fetching: link-page import and link previews
+	m.HandleFunc("POST /api/import/preview", s.api(s.authed(s.handleImportPreview)))
+	m.HandleFunc("POST /api/import/image", s.api(s.authed(s.handleImportImage)))
+	m.HandleFunc("POST /api/link-preview", s.api(s.authed(s.handleLinkPreview)))
 
 	// Reports and admin
 	m.HandleFunc("POST /api/report", s.api(s.handleReport))

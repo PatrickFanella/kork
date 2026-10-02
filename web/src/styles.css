@@ -2094,6 +2094,100 @@ a.editor-url:hover {
 @font-face { font-family: "Archivo Black"; src: url(/static/brand/ArchivoBlack-Regular.ttf) format("truetype"); font-display: swap; }
 .brand span, .auth-brand span { font-family: "Archivo Black", "Arial Black", sans-serif; font-weight: 400; letter-spacing: -0.01em; text-transform: lowercase; }
 
+/* ---------- Import and link previews ---------- */
+
+.blocks-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.import-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.import-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.import-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.import-group legend {
+  padding: 0 6px;
+  font-weight: 600;
+}
+.import-bulk {
+  display: flex;
+  gap: 4px;
+}
+.import-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.import-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.import-item:hover {
+  background: var(--surface-2);
+}
+.import-item input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex: none;
+  accent-color: var(--accent);
+}
+.import-problems {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.link-preview-helper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: -6px;
+}
+.link-preview-suggestions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.suggestion {
+  max-width: 100%;
+  text-align: left;
+}
+.suggestion-text {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.suggestion-thumb {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
 .stats-pair {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
