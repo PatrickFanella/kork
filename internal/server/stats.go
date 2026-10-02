@@ -26,7 +26,12 @@ const (
 // is stored.
 func (s *Server) countView(r *http.Request, pageID string) {
 	ref := analytics.ReferrerHost(r.Referer(), hostOnly(r.Host))
-	country := analytics.Country(r.Header.Get("CF-IPCountry"))
+	// Only a trusted proxy (Cloudflare in front) may set the country;
+	// otherwise visitors could forge it.
+	country := analytics.Country("")
+	if s.cfg.TrustProxy {
+		country = analytics.Country(r.Header.Get("CF-IPCountry"))
+	}
 	if err := s.store.CountView(r.Context(), pageID, ref, country); err != nil {
 		s.log.Error("count view", "err", err)
 	}

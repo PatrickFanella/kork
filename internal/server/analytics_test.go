@@ -87,6 +87,7 @@ func counts(list []store.NameCount) map[string]int64 {
 
 func TestAnalyticsCounting(t *testing.T) {
 	e := setup(t)
+	e.srv.cfg.TrustProxy = true // CF-IPCountry is honored only behind a trusted proxy
 	alice, pageID, ids := publishedPage(t, e, "alice@example.com", "alice")
 	anon := e.client()
 	host := strings.TrimPrefix(e.ts.URL, "http://")
@@ -362,5 +363,35 @@ func TestWeeklyStatsEmail(t *testing.T) {
 	alice.do("GET", "/api/account/settings", nil, &set)
 	if set.WeeklyStatsEmail {
 		t.Fatal("still subscribed after one-click unsubscribe")
+	}
+}
+
+func TestCountryNeedsTrustedProxy(t *testing.T) {
+	e := setup(t)
+	alice, pageID, _ := publishedPage(t, e, "carol@example.com", "carol")
+	req, _ := http.NewRequest("GET", e.ts.URL+"/carol", nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("CF-IPCountry", "FR")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	var st struct {
+		Countries []struct {
+			Name  string `json:"name"`
+			Count int64  `json:"count"`
+		} `json:"countries"`
+	}
+	alice.do("GET", "/api/pages/"+pageID+"/stats?days=7", nil, &st)
+	unknown := false
+	for _, c := range st.Countries {
+		if c.Name == "FR" {
+			t.Fatalf("forged country counted without a trusted proxy: %+v", st.Countries)
+		}
+		unknown = unknown || (c.Name == "unknown" && c.Count >= 1)
+	}
+	if !unknown {
+		t.Fatalf("view should count as unknown country: %+v", st.Countries)
 	}
 }
