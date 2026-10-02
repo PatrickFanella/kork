@@ -311,6 +311,9 @@ func (s *Server) handleUpdatePage(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusForbidden, "email_unverified", "confirm your email address before publishing", "published")
 			return
 		}
+		if *body.Published && !p.Published && !s.allowPublish(w, r, u, p) {
+			return
+		}
 		p.Published = *body.Published
 	}
 	if err := s.store.UpdatePage(r.Context(), p); errors.Is(err, store.ErrConflict) {
@@ -380,6 +383,7 @@ func (s *Server) handleCreateBlock(w http.ResponseWriter, r *http.Request) {
 		Type    string          `json:"type"`
 		Data    json.RawMessage `json:"data"`
 		Enabled *bool           `json:"enabled"`
+		scheduleInput
 	}
 	if !decodeJSON(w, r, &body) {
 		return
@@ -393,8 +397,15 @@ func (s *Server) handleCreateBlock(w http.ResponseWriter, r *http.Request) {
 		s.writeBlockErr(w, err)
 		return
 	}
+	if s.rejectBlocked(w, r, body.Type, data) {
+		return
+	}
+	var sched store.Schedule
+	if !body.applyTo(w, &sched) {
+		return
+	}
 	enabled := body.Enabled == nil || *body.Enabled
-	b, err := s.store.CreateBlock(r.Context(), p.ID, body.Type, data, enabled)
+	b, err := s.store.CreateBlock(r.Context(), p.ID, body.Type, data, enabled, sched)
 	if errors.Is(err, store.ErrLimit) {
 		writeErr(w, http.StatusUnprocessableEntity, "limit", "a page can have up to 100 blocks", "")
 		return
@@ -428,14 +439,21 @@ func (s *Server) handleUpdateBlock(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Data    json.RawMessage `json:"data"`
 		Enabled *bool           `json:"enabled"`
+		scheduleInput
 	}
 	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if !body.applyTo(w, &b.Schedule) {
 		return
 	}
 	if len(body.Data) > 0 {
 		data, err := blocks.Validate(b.Type, body.Data, s.uploadChecker(r))
 		if err != nil {
 			s.writeBlockErr(w, err)
+			return
+		}
+		if s.rejectBlocked(w, r, b.Type, data) {
 			return
 		}
 		b.Data = data

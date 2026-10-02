@@ -62,6 +62,9 @@ type Page struct {
 	Preview      bool
 	Live         bool
 	Nonce        string
+	// Badges marks blocks that the owner preview shows but visitors don't,
+	// keyed by block ID.
+	Badges map[string]Badge
 
 	// Filled by WritePage.
 	CSSVars      template.CSS

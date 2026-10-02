@@ -133,6 +133,18 @@ body.bg-image .page { background: color-mix(in srgb, var(--bg) 82%, transparent)
 .qr-toggle summary { width: max-content; margin: .35rem auto 0; padding: .2rem .5rem; color: var(--muted); font-size: .8rem; cursor: pointer; }
 .qr-toggle[open] .qr { margin-top: .5rem; }
 
+.schedule-badge {
+  width: max-content;
+  max-width: 100%;
+  margin: 0 auto .35rem;
+  padding: .2rem .55rem;
+  border-radius: 6px;
+  color: #111;
+  background: #ffd84d;
+  font: 600 .75rem/1.3 system-ui, sans-serif;
+  text-align: center;
+}
+
 .page-footer { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; margin-top: 3rem; color: var(--muted); font-size: .8rem; }
 .page-footer a, .link-button { padding: 0; border: 0; color: inherit; background: none; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 

@@ -20,6 +20,7 @@ import (
 	"git.subcult.tv/subculture-collective/zelda/internal/config"
 	"git.subcult.tv/subculture-collective/zelda/internal/mail"
 	"git.subcult.tv/subculture-collective/zelda/internal/render"
+	"git.subcult.tv/subculture-collective/zelda/internal/screen"
 	"git.subcult.tv/subculture-collective/zelda/internal/store"
 )
 
@@ -37,7 +38,13 @@ type Server struct {
 	mail     mail.Sender
 	log      *slog.Logger
 	resolver Resolver
-	editor   fs.FS // built SPA (web/dist)
+	editor   fs.FS            // built SPA (web/dist)
+	now      func() time.Time // clock for block schedules; replaced in tests
+
+	// screener checks link destinations; nil means screening is off.
+	screener  screen.Screener
+	safeTTL   time.Duration // how long a safe verdict is cached; 0 disables
+	unsafeTTL time.Duration
 
 	signupLimit  *limiter
 	loginIPLimit *limiter
@@ -47,6 +54,7 @@ type Server struct {
 	trackLimit   *limiter
 	uploadLimit  *limiter
 	verifyLimit  *limiter
+	acct         accountLimits
 }
 
 // New builds a server. editor may be nil when the SPA has not been built.
@@ -55,7 +63,8 @@ func New(cfg *config.Config, st *store.Store, sender mail.Sender, log *slog.Logg
 		log.Error("create upload dir", "err", err)
 	}
 	return &Server{
-		cfg: cfg, store: st, mail: sender, log: log, resolver: net.DefaultResolver, editor: editor,
+		cfg: cfg, store: st, mail: sender, log: log, resolver: net.DefaultResolver, editor: editor, now: time.Now,
+		safeTTL: 24 * time.Hour, unsafeTTL: 7 * 24 * time.Hour,
 		signupLimit:  newLimiter(5, time.Hour),
 		loginIPLimit: newLimiter(30, 15*time.Minute),
 		loginLimit:   newLimiter(10, 15*time.Minute),
@@ -64,6 +73,7 @@ func New(cfg *config.Config, st *store.Store, sender mail.Sender, log *slog.Logg
 		trackLimit:   newLimiter(120, time.Minute),
 		uploadLimit:  newLimiter(60, time.Hour),
 		verifyLimit:  newLimiter(20, time.Hour),
+		acct:         newAccountLimits(),
 	}
 }
 
@@ -99,6 +109,14 @@ func (s *Server) mainRoutes() *http.ServeMux {
 	m.HandleFunc("POST /api/auth/forgot", s.api(s.handleForgot))
 	m.HandleFunc("POST /api/auth/reset", s.api(s.handleReset))
 
+	// Account settings, export and deletion
+	m.HandleFunc("GET /api/account", s.api(s.authed(s.handleAccount)))
+	m.HandleFunc("POST /api/account/password", s.api(s.authed(s.handleChangePassword)))
+	m.HandleFunc("POST /api/account/email", s.api(s.authed(s.handleChangeEmail)))
+	m.HandleFunc("POST /api/account/email/confirm", s.api(s.handleConfirmEmail))
+	m.HandleFunc("GET /api/account/export", s.api(s.authed(s.handleExport)))
+	m.HandleFunc("DELETE /api/account", s.api(s.authed(s.handleDeleteAccount)))
+
 	// Catalog, pages, blocks
 	m.HandleFunc("GET /api/catalog", s.api(s.handleCatalog))
 	m.HandleFunc("GET /api/slugs/{slug}", s.api(s.authed(s.handleSlugCheck)))
@@ -126,6 +144,8 @@ func (s *Server) mainRoutes() *http.ServeMux {
 	m.HandleFunc("POST /api/admin/reports/{id}/resolve", s.api(s.admin(s.handleAdminResolve)))
 	m.HandleFunc("POST /api/admin/pages/{id}/suspend", s.api(s.admin(s.handleAdminSuspendPage)))
 	m.HandleFunc("POST /api/admin/users/{id}/suspend", s.api(s.admin(s.handleAdminSuspendUser)))
+	m.HandleFunc("GET /api/admin/users/pending", s.api(s.admin(s.handleAdminPendingUsers)))
+	m.HandleFunc("POST /api/admin/users/{id}/trust", s.api(s.admin(s.handleAdminTrustUser)))
 
 	// Account settings
 	m.HandleFunc("GET /api/account/settings", s.api(s.authed(s.handleGetAccountSettings)))
@@ -146,6 +166,8 @@ func (s *Server) mainRoutes() *http.ServeMux {
 	m.HandleFunc("GET /unsubscribe/weekly-stats", s.handleUnsubscribeWeekly)
 	m.HandleFunc("POST /unsubscribe/weekly-stats", s.handleUnsubscribeWeekly)
 	m.HandleFunc("GET /preview/{id}", s.handlePreview)
+	m.HandleFunc("GET /terms", s.handleTerms)
+	m.HandleFunc("GET /privacy", s.handlePrivacy)
 	m.HandleFunc("GET /{slug}", s.handlePublicPage)
 	m.HandleFunc("GET /{$}", s.handleLanding)
 	return m

@@ -16,6 +16,7 @@ import (
 	"git.subcult.tv/subculture-collective/zelda/internal/config"
 	"git.subcult.tv/subculture-collective/zelda/internal/db"
 	"git.subcult.tv/subculture-collective/zelda/internal/mail"
+	"git.subcult.tv/subculture-collective/zelda/internal/screen"
 	"git.subcult.tv/subculture-collective/zelda/internal/server"
 	"git.subcult.tv/subculture-collective/zelda/internal/store"
 	"git.subcult.tv/subculture-collective/zelda/web"
@@ -66,10 +67,18 @@ func run(log *slog.Logger) error {
 	jobs := &analytics.Jobs{Store: st, Mail: sender, Log: log, BaseURL: cfg.BaseURL, AppName: cfg.AppName,
 		RetentionDays: cfg.StatsRetentionDays}
 	go jobs.Run(ctx, time.Hour)
+	app := server.New(cfg, st, sender, log, editor)
+	if sc := screener(ctx, cfg, log); sc != nil {
+		app.SetScreener(sc)
+		go app.RunRechecks(ctx, 6*time.Hour)
+	}
+	if cfg.PublishMinAge > 0 {
+		log.Info("new accounts can publish after", "min_age", cfg.PublishMinAge.String())
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           server.New(cfg, st, sender, log, editor).Handler(),
+		Handler:           app.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -92,4 +101,30 @@ func run(log *slog.Logger) error {
 		return srv.Shutdown(shutdownCtx)
 	}
 	return nil
+}
+
+// screener builds the destination screener from config, or returns nil (and
+// warns) when no provider is configured.
+func screener(ctx context.Context, cfg *config.Config, log *slog.Logger) screen.Screener {
+	var list screen.Multi
+	if cfg.SafeBrowsingKey != "" {
+		list = append(list, screen.NewSafeBrowsing(cfg.SafeBrowsingKey))
+		log.Info("link screening: Google Safe Browsing enabled")
+	}
+	if cfg.BlocklistFile != "" || cfg.BlocklistURL != "" {
+		bl := &screen.Blocklist{File: cfg.BlocklistFile, FeedURL: cfg.BlocklistURL, Log: log}
+		if cfg.BlocklistFile != "" {
+			if err := bl.Load(); err != nil && cfg.BlocklistURL == "" {
+				log.Warn("link screening: cannot read ZELDA_BLOCKLIST_FILE", "err", err)
+			}
+		}
+		go bl.Run(ctx, 24*time.Hour)
+		list = append(list, bl)
+		log.Info("link screening: blocklist enabled", "file", cfg.BlocklistFile, "feed", cfg.BlocklistURL, "entries", bl.Len())
+	}
+	if len(list) == 0 {
+		log.Warn("link screening off: set ZELDA_SAFE_BROWSING_KEY or ZELDA_BLOCKLIST_FILE/ZELDA_BLOCKLIST_URL to check links for phishing and malware")
+		return nil
+	}
+	return list
 }

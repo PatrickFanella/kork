@@ -4,10 +4,12 @@ import { api, errorMessage, type Report } from "../api";
 import { useUser } from "../auth";
 import { Icon } from "../components/Icon";
 import { Notice, PageLoading, formatRelative, useDocumentTitle } from "../components/ui";
+import { PendingAccounts } from "./PendingAccounts";
 
 const REASONS: Record<string, string> = {
   spam: "Spam",
   scam: "Scam",
+  phishing: "Phishing",
   impersonation: "Impersonation",
   illegal: "Illegal content",
   other: "Other",
@@ -17,7 +19,12 @@ export function AdminScreen() {
   const user = useUser();
   useDocumentTitle("Admin");
   if (!user.is_admin) return <Navigate to="/" replace />;
-  return <Reports />;
+  return (
+    <>
+      <Reports />
+      <PendingAccounts />
+    </>
+  );
 }
 
 function Reports() {
@@ -125,7 +132,7 @@ function Reports() {
                       </a>
                     </td>
                     <td>
-                      <span className={`badge ${r.reason === "scam" || r.reason === "illegal" ? "badge-danger" : "badge-draft"}`}>
+                      <span className={`badge ${r.reason === "scam" || r.reason === "phishing" || r.reason === "illegal" ? "badge-danger" : "badge-draft"}`}>
                         {REASONS[r.reason] ?? r.reason}
                       </span>
                     </td>

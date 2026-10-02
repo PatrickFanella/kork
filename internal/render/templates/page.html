@@ -30,7 +30,7 @@
   <ol class="blocks">
   {{- range .Items}}
     {{- if eq .Kind "button"}}
-    <li class="item item-button">
+    <li class="item item-button">{{template "badge" (index $.Badges .ID)}}
       <a class="btn" href="{{.Href}}"{{if .External}} target="_blank" rel="{{if .Rel}}{{.Rel}} {{end}}noopener"{{else if .Rel}} rel="{{.Rel}}"{{end}}{{if .Track}} data-track="{{.ID}}"{{end}}>
         {{if .Image}}<img class="thumb" src="{{.Image}}" alt="" width="40" height="40" loading="lazy">{{else}}<span class="icon">{{.Icon}}</span>{{end}}
         <span class="label"><strong>{{.Title}}</strong>{{if .Subtitle}}<small>{{.Subtitle}}</small>{{end}}</span>
@@ -39,7 +39,7 @@
       {{if .QR}}<details class="qr-toggle"><summary>Show QR code<span class="sr-only"> for {{.Title}}</span></summary><div class="qr">{{.QR}}</div></details>{{end}}
     </li>
     {{- else if eq .Kind "copy"}}
-    <li class="item item-copy">
+    <li class="item item-copy">{{template "badge" (index $.Badges .ID)}}
       <button class="btn" type="button" data-copy="{{.Copy}}"{{if .Track}} data-track="{{.ID}}"{{end}}>
         <span class="icon">{{.Icon}}</span>
         <span class="label"><strong>{{.Title}}</strong><small class="copy-value">{{.Subtitle}}</small></span>
@@ -48,17 +48,17 @@
       {{if .QR}}<details class="qr-toggle"><summary>Show QR code<span class="sr-only"> for {{.Title}}</span></summary><div class="qr">{{.QR}}</div></details>{{end}}
     </li>
     {{- else if eq .Kind "heading"}}
-    <li class="item item-heading"><h2>{{.Title}}</h2></li>
+    <li class="item item-heading">{{template "badge" (index $.Badges .ID)}}<h2>{{.Title}}</h2></li>
     {{- else if eq .Kind "text"}}
-    <li class="item item-text"><p>{{.Body}}</p></li>
+    <li class="item item-text">{{template "badge" (index $.Badges .ID)}}<p>{{.Body}}</p></li>
     {{- else if eq .Kind "divider"}}
-    <li class="item item-divider" role="presentation"><hr></li>
+    <li class="item item-divider" role="presentation">{{template "badge" (index $.Badges .ID)}}<hr></li>
     {{- else if eq .Kind "image"}}
-    <li class="item item-image">{{if .Href}}<a href="{{.Href}}"{{if .External}} target="_blank" rel="noopener"{{end}}{{if .Track}} data-track="{{.ID}}"{{end}}>{{end}}<img src="{{.Image}}" alt="{{.Alt}}" loading="lazy">{{if .Href}}</a>{{end}}</li>
+    <li class="item item-image">{{template "badge" (index $.Badges .ID)}}{{if .Href}}<a href="{{.Href}}"{{if .External}} target="_blank" rel="noopener"{{end}}{{if .Track}} data-track="{{.ID}}"{{end}}>{{end}}<img src="{{.Image}}" alt="{{.Alt}}" loading="lazy">{{if .Href}}</a>{{end}}</li>
     {{- else if eq .Kind "embed"}}
-    <li class="item item-embed"><iframe src="{{.EmbedSrc}}" title="{{.EmbedTitle}}" loading="lazy" {{if .EmbedHeight}}height="{{.EmbedHeight}}" class="fixed"{{else}}class="video"{{end}} allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"></iframe></li>
+    <li class="item item-embed">{{template "badge" (index $.Badges .ID)}}<iframe src="{{.EmbedSrc}}" title="{{.EmbedTitle}}" loading="lazy" {{if .EmbedHeight}}height="{{.EmbedHeight}}" class="fixed"{{else}}class="video"{{end}} allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"></iframe></li>
     {{- else if eq .Kind "qr"}}
-    <li class="item item-qr"><figure><div class="qr">{{.QR}}</div>{{if .Title}}<figcaption>{{.Title}}</figcaption>{{end}}</figure></li>
+    <li class="item item-qr">{{template "badge" (index $.Badges .ID)}}<figure><div class="qr">{{.QR}}</div>{{if .Title}}<figcaption>{{.Title}}</figcaption>{{end}}</figure></li>
     {{- end}}
   {{- end}}
   </ol>
@@ -69,6 +69,10 @@
     <button type="button" class="link-button" data-report>Report</button>
     <span aria-hidden="true">·</span>
     <a href="{{.BaseURL}}">Made with {{.AppName}}</a>
+    <span aria-hidden="true">·</span>
+    <a href="{{.BaseURL}}/terms">Terms</a>
+    <span aria-hidden="true">·</span>
+    <a href="{{.BaseURL}}/privacy">Privacy</a>
   </footer>
 </main>
 
@@ -79,6 +83,7 @@
     <select id="report-reason" name="reason" required>
       <option value="spam">Spam</option>
       <option value="scam">Scam or fraud</option>
+      <option value="phishing">Phishing or malware</option>
       <option value="impersonation">Impersonation</option>
       <option value="illegal">Illegal content</option>
       <option value="other">Something else</option>
@@ -92,3 +97,5 @@
 </body>
 </html>
 {{end}}
+
+{{define "badge"}}{{if .Text}}<p class="schedule-badge">{{.Text}} <time datetime="{{.Datetime}}" data-local-time>{{.Display}}</time>. Visitors can't see this block now.</p>{{end}}{{end}}

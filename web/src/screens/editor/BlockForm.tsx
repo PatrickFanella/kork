@@ -3,19 +3,31 @@ import { ApiError, errorMessage, type BlockData, type BlockType, type CatalogSer
 import { useCatalog } from "../../catalog";
 import { ImageField, Notice, Spinner, TextField, uploadUrl } from "../../components/ui";
 import { blockFields, cleanBlockData, missingRequired, type FieldSpec } from "../../lib/blocks";
+import { scheduleError, type BlockSchedule } from "../../lib/schedule";
+import { ScheduleFields } from "./ScheduleFields";
 import { ServiceMonogram } from "./ServicePicker";
 
 interface BlockFormProps {
   type: BlockType;
   service?: CatalogService;
   initial?: BlockData;
+  initialSchedule?: BlockSchedule;
   submitLabel: string;
-  onSubmit: (data: BlockData) => Promise<void>;
+  onSubmit: (data: BlockData, schedule: BlockSchedule) => Promise<void>;
   onCancel: () => void;
   onChangeService?: () => void;
 }
 
-export function BlockForm({ type, service, initial = {}, submitLabel, onSubmit, onCancel, onChangeService }: BlockFormProps) {
+export function BlockForm({
+  type,
+  service,
+  initial = {},
+  initialSchedule,
+  submitLabel,
+  onSubmit,
+  onCancel,
+  onChangeService,
+}: BlockFormProps) {
   const catalog = useCatalog();
   const fields = blockFields(type, service);
   const [data, setData] = useState<BlockData>(() => {
@@ -26,6 +38,10 @@ export function BlockForm({ type, service, initial = {}, submitLabel, onSubmit, 
     }
     return d;
   });
+  const [schedule, setSchedule] = useState<BlockSchedule>(() => ({
+    starts_at: initialSchedule?.starts_at ?? null,
+    ends_at: initialSchedule?.ends_at ?? null,
+  }));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [general, setGeneral] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,7 +53,9 @@ export function BlockForm({ type, service, initial = {}, submitLabel, onSubmit, 
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    const missing = missingRequired(fields, data);
+    const missing: Record<string, string> = missingRequired(fields, data);
+    const order = scheduleError(schedule);
+    if (order) missing.ends_at = order;
     if (Object.keys(missing).length) {
       setErrors(missing);
       focusFirstError(e.currentTarget as HTMLFormElement);
@@ -47,9 +65,10 @@ export function BlockForm({ type, service, initial = {}, submitLabel, onSubmit, 
     setGeneral(null);
     setErrors({});
     try {
-      await onSubmit(cleanBlockData(type, data, service));
+      await onSubmit(cleanBlockData(type, data, service), schedule);
     } catch (err) {
-      if (err instanceof ApiError && err.field && fields.some((f) => f.key === err.field)) {
+      const scheduleField = err instanceof ApiError && (err.field === "starts_at" || err.field === "ends_at");
+      if (err instanceof ApiError && err.field && (scheduleField || fields.some((f) => f.key === err.field))) {
         setErrors({ [err.field]: err.message });
       } else {
         setGeneral(errorMessage(err));
@@ -93,6 +112,14 @@ export function BlockForm({ type, service, initial = {}, submitLabel, onSubmit, 
           onChange={(v) => set(f.key, v)}
         />
       ))}
+      <ScheduleFields
+        value={schedule}
+        errors={{ starts_at: errors.starts_at, ends_at: errors.ends_at }}
+        onChange={(next) => {
+          setSchedule(next);
+          if (errors.starts_at || errors.ends_at) setErrors((e) => ({ ...e, starts_at: "", ends_at: "" }));
+        }}
+      />
       <div className="form-actions">
         <button type="submit" className="btn btn-primary" disabled={busy}>
           {busy ? <Spinner label="Saving" /> : null}
