@@ -27,6 +27,8 @@ type Config struct {
 	AdminEmails map[string]bool
 	// CustomDomains enables attaching user domains (needs on-demand TLS in front).
 	CustomDomains bool
+	// StatsRetentionDays is how long aggregate stats rows are kept.
+	StatsRetentionDays int
 
 	SMTPHost string
 	SMTPPort int
@@ -67,6 +69,10 @@ func Load() (*Config, error) {
 		return nil, errors.New("ZELDA_SMTP_PORT must be a number")
 	}
 	c.SMTPPort = port
+	c.StatsRetentionDays, err = strconv.Atoi(env("ZELDA_STATS_RETENTION_DAYS", "400"))
+	if err != nil || c.StatsRetentionDays < 30 {
+		return nil, errors.New("ZELDA_STATS_RETENTION_DAYS must be a number of days, at least 30")
+	}
 	if c.DatabaseURL == "" {
 		return nil, errors.New("ZELDA_DATABASE_URL is required")
 	}

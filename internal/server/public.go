@@ -126,7 +126,7 @@ func (s *Server) renderPage(w http.ResponseWriter, r *http.Request, p *store.Pag
 	if !preview {
 		h.Set("Cache-Control", "public, max-age=60")
 		if !botUA.MatchString(r.UserAgent()) {
-			_ = s.store.Count(r.Context(), p.ID, store.ZeroBlockID)
+			s.countView(r, p.ID)
 		}
 	}
 	w.Write(buf.Bytes()) //nolint:errcheck

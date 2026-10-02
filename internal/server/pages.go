@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -354,26 +353,6 @@ func (s *Server) handlePageQR(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/svg+xml")
 	w.Header().Set("Content-Disposition", `inline; filename="`+p.Slug+`-qr.svg"`)
 	w.Write([]byte(svg)) //nolint:errcheck
-}
-
-func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
-	p := s.ownedPage(w, r)
-	if p == nil {
-		return
-	}
-	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
-	if days < 1 || days > 365 {
-		days = 30
-	}
-	st, err := s.store.Stats(r.Context(), p.ID, days)
-	if err != nil {
-		s.serverErr(w, r, err)
-		return
-	}
-	for i := range st.Blocks {
-		st.Blocks[i].Label = blocks.Label(st.Blocks[i].Type, st.Blocks[i].Data)
-	}
-	writeJSON(w, http.StatusOK, st)
 }
 
 // ---- blocks ----

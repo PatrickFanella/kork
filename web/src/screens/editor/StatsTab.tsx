@@ -1,10 +1,13 @@
 import { useEffect, useId, useState } from "react";
-import { api, errorMessage, type Stats } from "../../api";
+import { api, errorMessage, type NameCount, type Stats } from "../../api";
 import { Notice, PageLoading } from "../../components/ui";
+import { countryLabel, formatPercent, referrerLabel } from "../../lib/stats";
 import { fillDays } from "../../lib/validate";
 import type { EditorProps } from "./types";
+import { WeeklyEmailToggle } from "./WeeklyEmailToggle";
 
-const RANGES = [7, 30, 90] as const;
+// The server returns at most 30 days for now.
+const RANGES = [7, 30] as const;
 
 export function StatsTab({ page }: EditorProps) {
   const [days, setDays] = useState<number>(30);
@@ -17,7 +20,7 @@ export function StatsTab({ page }: EditorProps) {
     setError(null);
     api
       .stats(page.id, days)
-      .then((data) => !cancelled && setStats({ days, data }))
+      .then((data) => !cancelled && setStats({ days: data.days ?? days, data }))
       .catch((err: unknown) => !cancelled && setError(errorMessage(err)));
     return () => {
       cancelled = true;
@@ -97,6 +100,9 @@ export function StatsTab({ page }: EditorProps) {
                 <th scope="col" className="num">
                   Share
                 </th>
+                <th scope="col" className="num">
+                  <abbr title="Clicks divided by page views">Click-through</abbr>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -110,13 +116,91 @@ export function StatsTab({ page }: EditorProps) {
                     </span>
                     {totalClicks ? Math.round((b.count / totalClicks) * 100) : 0}%
                   </td>
+                  <td className="num">{b.ctr === undefined ? "–" : formatPercent(b.ctr)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </section>
+
+      <div className="stats-pair">
+        <BreakdownTable
+          id="referrers-heading"
+          title="Referrers"
+          column="Site"
+          rows={data.referrers ?? []}
+          total={periodViews}
+          label={referrerLabel}
+          empty="No referrers yet. Sites that link to your page show up here."
+        />
+        <BreakdownTable
+          id="countries-heading"
+          title="Countries"
+          column="Country"
+          rows={data.countries ?? []}
+          total={periodViews}
+          label={(c) => countryLabel(c)}
+          empty="No country data yet."
+        />
+      </div>
+      <p className="muted small">
+        Referrers and countries are daily totals per page. No IP addresses, cookies or browser details are stored.
+      </p>
+
+      <WeeklyEmailToggle />
     </div>
+  );
+}
+
+function BreakdownTable({
+  id,
+  title,
+  column,
+  rows,
+  total,
+  label,
+  empty,
+}: {
+  id: string;
+  title: string;
+  column: string;
+  rows: NameCount[];
+  /** Page views over the range; shares are of all views, not just the listed rows. */
+  total: number;
+  label: (name: string) => string;
+  empty: string;
+}) {
+  return (
+    <section className="card section" aria-labelledby={id}>
+      <h2 id={id}>{title}</h2>
+      {rows.length === 0 ? (
+        <p className="muted">{empty}</p>
+      ) : (
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th scope="col">{column}</th>
+              <th scope="col" className="num">
+                Views
+              </th>
+              <th scope="col" className="num">
+                Share
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.name}>
+                <td>{label(r.name)}</td>
+                <td className="num">{r.count.toLocaleString()}</td>
+                <td className="num">{total ? Math.round((r.count / total) * 100) : 0}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
   );
 }
 

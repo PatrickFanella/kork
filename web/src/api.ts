@@ -183,10 +183,26 @@ export interface SlugCheck {
   reason?: string;
 }
 
+export interface NameCount {
+  name: string;
+  count: number;
+}
+
 export interface Stats {
+  /** The range actually returned; the server caps it (30 days for now). */
+  days?: number;
   total_views: number;
   views: { day: string; count: number }[];
-  blocks: { block_id: string; label: string; count: number }[];
+  /** `ctr` is clicks divided by page views over the range. */
+  blocks: { block_id: string; label: string; count: number; ctr?: number }[];
+  /** Top 20 referrer domains; "direct" and "other" are special rows. */
+  referrers?: NameCount[];
+  /** Top 20 ISO country codes, or "unknown". */
+  countries?: NameCount[];
+}
+
+export interface AccountSettings {
+  weekly_stats_email: boolean;
 }
 
 export interface Upload {
@@ -339,6 +355,11 @@ export const api = {
   stats: (id: string, days = 30) =>
     request<Stats>("GET", `/api/pages/${enc(id)}/stats?days=${days}`),
   qrUrl: (id: string) => `/api/pages/${enc(id)}/qr.svg`,
+
+  // Account
+  accountSettings: () => request<AccountSettings>("GET", "/api/account/settings"),
+  updateAccountSettings: (patch: Partial<AccountSettings>) =>
+    request<AccountSettings>("PATCH", "/api/account/settings", patch),
 
   // Blocks
   createBlock: (pageId: string, type: BlockType, data: BlockData, enabled = true) =>
