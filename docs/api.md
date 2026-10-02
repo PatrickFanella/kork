@@ -11,7 +11,7 @@ The Go service serves everything from one origin:
 | `POST /t/{blockId}` | Click beacon sent by the public page script (links stay direct so `rel="me"` verification works) |
 | `/vcard/{blockId}` | vCard download for a contact block |
 | `/unsubscribe/weekly-stats?token=...` | Signed one-click unsubscribe from the weekly stats email (GET or POST) |
-| `/u/{uploadId}` | Uploaded image |
+| `/u/{uploadId}` | Uploaded image or font |
 | `/static/*` | Public page CSS/JS |
 | `/terms`, `/privacy` | Terms of service and privacy policy (server-rendered, main host only) |
 
@@ -65,7 +65,7 @@ Password checks on these endpoints are limited to 10 attempts per 15 minutes per
 
 The email-change link is `/app/confirm-email?token=...` and expires after 24 hours. Requesting another change replaces the pending one. Until confirmation the account keeps its old address.
 
-The export ZIP holds `account.json` (`exported_at, email, email_verified, created_at, terms_version, terms_accepted_at, pages: [Page fields + blocks, domains: [{hostname, verified, created_at}], stats: [{block_id, day, count}]], uploads: [{id, content_type, size, file}]`) and each uploaded image at its `file` path (`uploads/<id>.<ext>`). Stats rows with the zero block ID are page views.
+The export ZIP holds `account.json` (`exported_at, email, email_verified, created_at, terms_version, terms_accepted_at, pages: [Page fields + custom_css, blocks, domains: [{hostname, verified, created_at}], stats: [{block_id, day, count}]], uploads: [{id, content_type, size, file}]`) and each uploaded image or font at its `file` path (`uploads/<id>.<ext>`). Stats rows with the zero block ID are page views.
 
 Deleting an account removes the user, sessions, tokens, pending email changes, uploads rows and files, pages, blocks, domains, reports about those pages and stats. Its public pages return 404.
 
@@ -112,6 +112,8 @@ Categories: `social, video, music, creator, payment, crypto, contact, web`.
 | GET | `/api/slugs/{slug}` | – | `200 {available: bool, reason?: string}` |
 | GET | `/api/pages/{id}/qr.svg` | – | SVG QR code of the public URL |
 | GET | `/api/pages/{id}/stats?days=30` | – | `200 Stats`; `days` defaults to 30 and is capped at the plan's `stats_days` (Free 30, Pro 365) and at `ZELDA_STATS_RETENTION_DAYS` |
+| GET | `/api/pages/{id}/stats.csv?days=30` | – | `200 text/csv` download (Pro, see [Stats CSV](#stats-csv)) |
+| PUT | `/api/pages/{id}/css` | `{css}` | `200 {css, warnings, applied}` (Pro, see [Custom CSS](#custom-css)) |
 
 Slugs: 3–32 chars, `[a-z0-9][a-z0-9-_]*`, some reserved. The page limit depends on the plan. A Free account at its limit gets `403 upgrade_required` with `feature: "pages"`; a Pro account at its limit gets `422 limit`.
 
@@ -128,6 +130,7 @@ Slugs: 3–32 chars, `[a-z0-9][a-z0-9-_]*`, some reserved. The page limit depend
   "theme": Theme,
   "blocks": [Block],
   "domains": [Domain],
+  "custom_css": "sanitized CSS or empty",
   "created_at": "...", "updated_at": "..."
 }
 ```
@@ -144,11 +147,49 @@ Slugs: 3–32 chars, `[a-z0-9][a-z0-9-_]*`, some reserved. The page limit depend
   "button_shape": "square | rounded | pill",
   "layout": "stack | ledger",
   "background": {"kind": "solid | gradient | image", "color2": "#rrggbb", "image_upload_id": "uuid"},
-  "hide_branding": false
+  "hide_branding": false,
+  "font_uploads": {"body": "uuid", "display": "uuid"}
 }
 ```
 
 `hide_branding: true` removes the "Made with Kork" footer link. Turning it on needs Pro (`403 upgrade_required`, `feature: "remove_branding"`, `field: "hide_branding"`). Pages show the link whenever the owner's plan lacks the feature. The stored flag is kept, so other theme changes still save after Pro ends.
+
+`font_uploads` is optional; either key can be left out. `body` sets the font for the whole page and `display` sets it for the page title and heading blocks. Each ID must be a font the user uploaded with `POST /api/uploads/font`, otherwise `422` with `field: "font_uploads"`. Choosing a font that isn't already stored needs `custom_fonts` (`403 upgrade_required`, `field: "font_uploads"`). Keeping or removing stored fonts works on every plan. A PATCH that sends a theme without `font_uploads` removes them. While the owner has the feature, the page adds `@font-face` rules named `kork-body` and `kork-display` that load `/u/{id}` with `font-display: swap`, and puts them in front of the preset font stack. Without the feature, the preset `font` is used.
+
+### Custom CSS
+
+`PUT /api/pages/{id}/css` with `{"css": "..."}` sanitizes the CSS, stores the result on the page and returns:
+
+```json
+{"css": "body.kork-page .btn{letter-spacing:.02em}", "warnings": ["line 3: @import is not allowed"], "applied": true}
+```
+
+- Input is limited to 20 KB (`422 too_large`, `field: "css"`). A sanitized result over 64 KB is also rejected.
+- Setting non-empty CSS needs `custom_css` (`403 upgrade_required`, `field: "css"`). Sending `""` removes it on every plan.
+- The stored value is the sanitized output, not the input. `warnings` lists each removed part with its line number; the editor shows them.
+- `applied` is false when the owner's plan doesn't include custom CSS. The CSS stays stored and the page doesn't use it until Pro returns.
+
+The sanitizer tokenizes the input with the CSS Syntax Level 3 algorithm (`internal/customcss`), builds rules from the tokens and writes the output from tokens. It doesn't use regexes on the source text. Comments are removed and escapes are decoded before any check, so `\75 rl(` counts as `url(` and `@im/**/port` doesn't form `@import`. It keeps:
+
+- style rules, plus `@media`, `@supports` and `@container` (up to 3 levels) containing style rules;
+- `@keyframes` (and `-webkit-keyframes`) with `from`, `to` and percentage frames;
+- `@font-face`, but only if every `src` URL is one of the owner's uploads. Only font descriptors are kept.
+
+It removes:
+
+- every other at-rule: `@import`, `@charset`, `@namespace`, `@layer`, `@page`, `@property` and the rest;
+- `url()` and `src()` unless the value is exactly `/u/<uuid>` for an upload owned by the page owner. Remote, protocol-relative and `data:` URLs are removed;
+- functions outside an allowlist of math, color, gradient, transform, filter, easing, shape and font functions. This removes `expression()`, `image-set()`, `cross-fade()`, `element()` and `paint()`;
+- `behavior`, `-moz-binding` and any property whose name contains `behavior` or `binding`;
+- strings containing `javascript:` or `vbscript:`, including when whitespace or control characters are inserted;
+- nested rules inside a style rule, and declarations containing `{}` blocks;
+- selectors containing at-keywords, URLs, broken tokens or delimiters that no selector uses, such as `<`, `/` and `!`.
+
+The output can't close the `<style>` element. Identifiers and strings are written with `<`, `>`, `&`, quotes, backslashes and control characters hex-escaped. A `<` delimiter, which media range syntax uses, is always followed by `=` or a space. As a last check, output containing `</`, `<!--` or `-->` is discarded.
+
+Scoping: each selector is prefixed with `body.kork-page `, and the public page's `<body>` has that class. A leading `html`, `body`, `html body` or `:root` is replaced by `body.kork-page`. So `body { background: #000 }` styles the page background, `:root { --accent: red }` overrides theme variables, and `.btn` styles the buttons. The prefix adds specificity (one class and one type), so custom rules override the page stylesheet without `!important`. This approach was chosen over CSS nesting because it works in every browser and needs no nesting-aware parsing. Rules can't reach outside the body. Inside it, though, custom CSS can restyle or hide anything, including the footer's Report link.
+
+Public pages put the CSS in the page's nonce'd `<style>` element, after the theme variables and font rules, so the CSP still allows only nonce'd inline styles. The stored CSS is sanitized again on every render, with URL ownership not rechecked, so CSS saved under an older sanitizer is still checked.
 
 Changing `preset` on PATCH without `colors` resets the colors to that preset.
 
@@ -171,6 +212,29 @@ Changing `preset` on PATCH without `colors` resets the colors to that preset.
 - `referrers`: top 20 by views. The name is the `Referer` host, lowercased, without `www.` or port. `direct` covers no referrer, non-web referrers and links from the same host. After 200 distinct referrers for a page in one day, the rest count as `other`. Referrers apply to page views only.
 - `countries`: top 20 ISO 3166 alpha-2 codes from Cloudflare's `CF-IPCountry` header; missing, `XX` and `T1` (Tor) count as `unknown`.
 - Only daily totals are stored: no IP addresses, cookies or user agents. Rows older than `ZELDA_STATS_RETENTION_DAYS` (default 400) are deleted hourly.
+
+### Stats CSV
+
+`GET /api/pages/{id}/stats.csv?days=N` downloads the same aggregates as one CSV table. It needs the `stats_export` feature (`403 upgrade_required`, `feature: "stats_export"`). `days` defaults to 30 and is capped like `/stats`. The file is `text/csv; charset=utf-8`, sent as an attachment named `<slug>-stats-<days>d-<YYYY-MM-DD>.csv`.
+
+The CSV uses one long-format table instead of several sections. Spreadsheets and data tools can load it directly and pivot it by `metric`:
+
+```csv
+date,metric,key,label,count
+2026-10-01,views,,,12
+2026-10-01,clicks,6f1c…,Instagram,4
+2026-10-01,referrer,instagram.com,,7
+2026-10-01,country,US,,9
+```
+
+| `metric` | `key` | `label` | Rows |
+|---|---|---|---|
+| `views` | empty | empty | one per day in the range, including zero days |
+| `clicks` | block ID | block label, or `Deleted block` | one per block per day with clicks |
+| `referrer` | referrer name as in `Stats` (`direct`, `other` included) | empty | one per referrer per day |
+| `country` | ISO code or `unknown` | empty | one per country per day |
+
+Rows are sorted by date, then in the metric order above, then by count, highest first. Referrers and countries aren't limited to the top 20. Text cells that start with `=`, `+`, `-`, `@`, tab or carriage return get a leading `'`, so spreadsheets don't run them as formulas.
 
 ## Account settings
 
@@ -253,6 +317,10 @@ Setup instructions shown to the user: add the TXT record, point the hostname at 
 
 `POST /api/uploads` multipart field `file`; PNG, JPEG, WebP or GIF, max 5 MB. Response `201 {id, url, content_type, size}`.
 
+`POST /api/uploads/font` multipart field `file`; WOFF2, WOFF, TTF or OTF, max 1 MB. Needs the `custom_fonts` feature (`403 upgrade_required`, `field: "file"`). The type comes from the file's first bytes (`wOF2`, `wOFF`, `00 01 00 00`, `OTTO`), never from the file name or declared type. WOFF and WOFF2 headers must state the file's actual length, and TTF/OTF need 1–100 tables. `content_type` is `font/woff2`, `font/woff`, `font/ttf` or `font/otf`. Other files get `422 unsupported`; files over 1 MB get `413 too_large`. Font uploads count against the same 60-per-hour upload limit.
+
+`/u/{id}` serves fonts with their font type and `Cross-Origin-Resource-Policy: same-origin`, without CORS headers. Pages load them from their own host: the main host or the custom domain.
+
 ## Import and link previews
 
 These endpoints make the server fetch a URL the user supplies. All fetches go through `internal/fetch`:
@@ -333,8 +401,9 @@ Every account is `free` or `pro`. Admins grant Pro by hand for now; billing will
 | Stats history | 30 days | 365 days |
 | Custom domains | 0 | 1 |
 | `remove_branding`: hide the footer credit | no | yes |
-| `custom_css` | no | yes (not built yet, #14) |
-| `custom_fonts`: font uploads | no | yes (not built yet, #14) |
+| `custom_css`: custom CSS per page | no | yes |
+| `custom_fonts`: font uploads | no | yes |
+| `stats_export`: stats CSV download | no | yes |
 | `scheduled_links` | yes | yes |
 
 `Plan` (in `GET /api/auth/me`):
@@ -347,7 +416,7 @@ Every account is `free` or `pro`. Admins grant Pro by hand for now; billing will
   "expires_at": "2026-11-01T00:00:00Z",
   "domains_grace_until": "2026-11-08T00:00:00Z",
   "pages": 5, "stats_days": 30, "custom_domains": 0,
-  "features": {"custom_domains": false, "remove_branding": false, "custom_css": false, "custom_fonts": false, "scheduled_links": true},
+  "features": {"custom_domains": false, "remove_branding": false, "custom_css": false, "custom_fonts": false, "stats_export": false, "scheduled_links": true},
   "pro": {"plan": "pro", "pages": 25, "stats_days": 365, "custom_domains": 1, "features": {"custom_domains": true, "...": true}}
 }
 ```
@@ -368,6 +437,8 @@ Data is kept; Pro-only settings stop applying.
 
 - Pages over the Free limit stay and keep working. New pages can't be created until the account is under the limit.
 - The footer credit comes back. The stored `hide_branding` flag is kept for when Pro returns.
-- Stats requests are capped at 30 days again. Older rows stay until `ZELDA_STATS_RETENTION_DAYS` removes them.
+- Stats requests are capped at 30 days again. Older rows stay until `ZELDA_STATS_RETENTION_DAYS` removes them. CSV download returns `403 upgrade_required`.
+- Custom CSS stays stored but isn't added to the page. It can be removed (`PUT .../css` with `""`) but not changed.
+- Uploaded fonts stay in the theme but the page uses the preset `font`. Theme changes that keep or remove them still save.
 - Custom domains keep serving for 7 days after `expires_at` (`domains_grace_until`). After that they stay attached but aren't served and get no certificate until Pro is granted again. Revoking Pro by hand (setting `free`) has no grace period.
 - Domains attached before plans existed (migration `0008`) keep working on any plan.
