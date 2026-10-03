@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "product": "kork",
+  "selected_for": "Gitea marketing README",
+  "source_repository": "subculture-collective/subcult-tv",
+  "source_revision": "49cde4b00db3149d15e107b642354ce50538fd10",
+  "source_path": "studio/branding/library/brands/kork/social/banner-x-bluesky.png",
+  "source_sha256": "185973c2c9db0cad13823aa6581bb8306819f5ed8a704f62097a793dff05b76f",
+  "source_manifest_path": "studio/branding/library/brands/kork/asset-manifest.json",
+  "source_manifest_sha256": "b20c78112c14ff895633fbced61a764d3fbcc69b60c97c3c3443f8cd36927031",
+  "destination_path": "docs/assets/readme/banner.png",
+  "destination_sha256": "185973c2c9db0cad13823aa6581bb8306819f5ed8a704f62097a793dff05b76f",
+  "voice_source": "studio/content/VOICE.md",
+  "voice_source_sha256": "5b3427970e133693dcea70660de38bb8ffae4b242b5d178b4e17cbdcccff43bd",
+  "alt_text": "Kork: All of it, pinned to one link. Corkboard cards with sample handles and a decorative QR glyph.",
+  "publication_scope": "README artwork only; no site deployment, social dispatch or media relay"
+}
