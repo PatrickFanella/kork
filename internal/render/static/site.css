@@ -34,6 +34,8 @@ a { color: var(--ink); }
 .hero { display: grid; grid-template-columns: 1.25fr .75fr; align-items: center; gap: 2rem; }
 .kicker { margin: 0 0 1rem; font: .85rem var(--mono); letter-spacing: .06em; }
 h1 { margin: 0 0 1.25rem; font: clamp(2.6rem, 6.2vw, 4.6rem)/.95 var(--display); text-transform: uppercase; letter-spacing: -.01em; }
+/* The landing headline is a full sentence, so it runs smaller than a slogan. */
+.hero h1 { font-size: clamp(2rem, 4.4vw, 3.3rem); line-height: 1; }
 .message h1 { text-transform: none; font-size: clamp(2.4rem, 6vw, 4rem); }
 .lede { max-width: 52ch; margin: 0 0 2rem; font-size: 1.15rem; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1.25rem; margin: 0; }
@@ -65,6 +67,7 @@ button.cta { font: inherit; font-weight: 700; cursor: pointer; }
 .features li:nth-child(odd) { transform: rotate(-1deg); }
 .features li:nth-child(even) { transform: rotate(1deg); }
 .features strong { display: block; margin-bottom: .25rem; font: 1.05rem/1.2 var(--display); }
+.smallprint { max-width: 62ch; margin: 3rem 0 0; font-size: .98rem; }
 .site-footer { width: min(calc(100% - 2rem), 1100px); margin: 0 auto; padding: 1.5rem 0 2rem; border-top: 3px solid var(--ink); font-size: .9rem; }
 /* Terms and privacy: a paper sheet pinned to the cork. */
 .legal { flex: none; margin: 1rem auto 3rem; max-width: 46rem; padding: 2rem clamp(1.25rem, 4vw, 3rem) 3rem; background: var(--paper); box-shadow: 5px 6px 0 rgb(27 19 12 / .85); border: 3px solid var(--ink); }

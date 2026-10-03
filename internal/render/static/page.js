@@ -115,7 +115,7 @@
         body: JSON.stringify({ slug: form.dataset.slug, reason: data.get("reason"), details: data.get("details") }),
       });
       form.closest("dialog").close();
-      say(res.ok ? "Thanks, we'll take a look." : "Couldn't send the report. Try again later.");
+      say(res.ok ? "Report sent." : "Couldn't send the report. Try again later.");
     } catch {
       say("Couldn't send the report. Try again later.");
     }

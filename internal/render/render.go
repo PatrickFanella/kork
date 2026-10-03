@@ -161,6 +161,8 @@ type Simple struct {
 	Landing      bool
 	ServiceCount int
 	AssetVersion string
+	// ContactEmail, when set, is linked from the landing page.
+	ContactEmail string
 	// Form, when set, replaces the home link with a one-button POST form.
 	Form *SimpleForm
 }

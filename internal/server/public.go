@@ -22,7 +22,7 @@ const frameSources = "https://www.youtube-nocookie.com https://player.vimeo.com 
 
 func (s *Server) handleLanding(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = render.WriteSimple(w, render.Simple{AppName: s.cfg.AppName, BaseURL: s.cfg.BaseURL, Title: s.cfg.AppName + ": every link, one board", Landing: true})
+	_ = render.WriteSimple(w, render.Simple{AppName: s.cfg.AppName, BaseURL: s.cfg.BaseURL, Title: s.cfg.AppName + ": a free link page by SUBCULT", Landing: true, ContactEmail: s.cfg.ContactEmail})
 }
 
 func (s *Server) notFoundPage(w http.ResponseWriter) {
