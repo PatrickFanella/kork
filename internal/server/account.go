@@ -127,7 +127,7 @@ func (s *Server) handleChangeEmail(w http.ResponseWriter, r *http.Request) {
 			"\n\nThe link expires in 24 hours. Until then your account keeps using " + u.Email +
 			". If you didn't ask for this, ignore this message.\n"})
 	s.sendMail(mail.Message{To: u.Email, Subject: "Email change requested on " + s.cfg.AppName,
-		Body: "Someone signed in to your " + s.cfg.AppName + " account asked to change its email to " + email +
+		Body: "Someone signed in to your " + s.cfg.AppName + " account and asked to change its email address to " + email +
 			". Nothing changes until that address is confirmed.\n\nIf this wasn't you, change your password: " +
 			s.cfg.BaseURL + "/app/settings\n"})
 	a, err := s.store.Account(r.Context(), u)

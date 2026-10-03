@@ -261,7 +261,7 @@ func (s *Server) confirmationMail(p *store.Page, d blocks.Signup, email, tok str
 		who = "Your address will then be added to the page owner's mailing list at Brevo, their email provider."
 	}
 	return mail.Message{To: email, Subject: "Confirm your subscription: " + oneLineClip(d.Title, 80),
-		Body: "Someone, probably you, asked to join \"" + d.Title + "\" on " + p.Title + "'s page (" + s.pageURL(p.Slug) + ").\n\n" +
+		Body: "Please confirm your subscription to \"" + d.Title + "\" on " + p.Title + "'s page (" + s.pageURL(p.Slug) + "). Someone entered this address there.\n\n" +
 			"Confirm here:\n\n" + link + "\n\n" + who + "\n\n" +
 			"If you didn't ask for this, ignore this email. Unconfirmed addresses are deleted after 48 hours.\n"}
 }
