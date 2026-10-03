@@ -5,16 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#d4a56c">
 <title>{{.Title}}</title>
-<meta name="description" content="{{.AppName}} builds link pages for creators: socials, payments, QR codes and more, pinned to one page.">
+<meta name="description" content="{{.AppName}} is a free link page: your socials, payment buttons that open your own accounts, QR codes, tour dates and an email sign-up at one address.">
 <link rel="icon" href="/static/brand/favicon.svg?v={{.AssetVersion}}" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon.png?v={{.AssetVersion}}">
 {{if .Landing}}
 <meta property="og:type" content="website">
-<meta property="og:title" content="{{.AppName}}: every link, one board">
-<meta property="og:description" content="Socials, payments, QR codes and more on one page.">
+<meta property="og:title" content="{{.AppName}}: a free link page by SUBCULT">
+<meta property="og:description" content="Socials, payment buttons that open your own accounts, QR codes and tour dates at one address. Free, and no cut of your tips.">
 <meta property="og:url" content="{{.BaseURL}}/">
 <meta property="og:image" content="{{.BaseURL}}/static/brand/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Kork: all of it, pinned to one link. Socials, payments, QR codes and more on one page.">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="{{.BaseURL}}/static/brand/og.png">
+<meta name="twitter:image:alt" content="Kork: all of it, pinned to one link. Socials, payments, QR codes and more on one page.">
 {{end}}
 <link rel="stylesheet" href="/static/site.css?v={{.AssetVersion}}">
 </head>
@@ -28,19 +33,23 @@
   <section class="hero">
     <div>
       <p class="kicker">LINK PAGES / BY SUBCULT</p>
-      <h1>Every link.<br>One board.</h1>
-      <p class="lede">Pin your socials, Cash App, PayPal, Venmo, crypto addresses, QR codes, music and video players and a contact card to one page. Pick a theme and share one link.</p>
+      <h1>One link in your bio, and everything else pinned to it.</h1>
+      <p class="lede">{{.AppName}} is a free link page. Put up your socials, Cash App, PayPal, Venmo, crypto addresses, QR codes, music and video players, tour dates, an email sign-up and a contact card, then hand out one address. Tips go to your accounts, not ours. We never touch the money, so there's no cut to take.</p>
       <p class="actions"><a class="cta" href="/app/signup">Make your page</a> <a class="quiet" href="/app/login">Log in</a></p>
     </div>
     <img class="hero-art" src="/static/brand/hero.svg?v={{.AssetVersion}}" alt="Paper cards pinned to cork: @yourname, $yourname and a QR code" width="540" height="310">
   </section>
   <ul class="features">
-    <li><strong>{{.ServiceCount}} services</strong>Instagram to Bandcamp, with icons and handle checks.</li>
-    <li><strong>Payments and tips</strong>Cash App, PayPal, Venmo, Ko-fi, Zelle, Bitcoin and more.</li>
-    <li><strong>QR codes</strong>For the whole page or any single link.</li>
-    <li><strong>Themes</strong>Ten presets, your own colors, fonts and backgrounds.</li>
-    <li><strong>No trackers</strong>Visit counts are anonymous daily totals.</li>
+    <li><strong>{{.ServiceCount}} services</strong>Instagram to Bandcamp to Monero, each with its own icon and a handle check.</li>
+    <li><strong>Payment buttons</strong>They open your own Cash App, PayPal, Venmo, Ko-fi or wallet. {{.AppName}} takes no cut.</li>
+    <li><strong>QR codes</strong>One for the whole page and one for any single link, ready for a flyer or the merch table.</li>
+    <li><strong>Ten themes</strong>Start from a preset, then change the colors, fonts, buttons and background.</li>
+    <li><strong>Dates and sign-ups</strong>Tour dates, your latest video or post, and an email list people confirm before they join.</li>
+    <li><strong>Moving in</strong>Import your links from Linktree or another link page.</li>
+    <li><strong>Stats, no snooping</strong>Anonymous daily counts of views and clicks. No visitor IPs, cookies or user agents are stored.</li>
+    <li><strong>Moving out</strong>Download everything as a ZIP, or delete your account, from Settings.</li>
   </ul>
+  <p class="smallprint">{{.AppName}} opened on October 2, 2026. It's free, it's new, and it will have rough edges{{if .ContactEmail}}; <a href="mailto:{{.ContactEmail}}">tell us where</a>{{end}}. One house rule: you can build a page right away, and a new account can publish after 24 hours. The wait slows down spam.</p>
   {{else}}
   <section class="message">
     <h1>{{.Heading}}</h1>

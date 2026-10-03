@@ -177,8 +177,8 @@ function CreatePageForm({ base, firstPage, onCancel }: { base: string; firstPage
 
   return (
     <section className="card create-card" aria-labelledby="create-heading">
-      <h2 id="create-heading">{firstPage ? "Create your first page" : "New page"}</h2>
-      {firstPage && <p className="muted">Pick an address. You can change it later.</p>}
+      <h2 id="create-heading">{firstPage ? "Put up your first page" : "New page"}</h2>
+      {firstPage && <p className="muted">Pick the address you'll hand out. You can change it later.</p>}
       <form onSubmit={onSubmit} className="create-form" noValidate>
         {error && <Notice tone="danger">{error}</Notice>}
         <div className="create-grid">

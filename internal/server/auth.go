@@ -103,7 +103,9 @@ func (s *Server) sendVerification(ctx context.Context, u *store.User) {
 	}
 	link := s.cfg.BaseURL + "/app/verify?token=" + tok
 	s.sendMail(mail.Message{To: u.Email, Subject: "Confirm your " + s.cfg.AppName + " email",
-		Body: "Confirm your email to publish your page:\n\n" + link + "\n\nThe link expires in 24 hours. If you didn't sign up, ignore this message.\n"})
+		Body: "This is the email check for your new " + s.cfg.AppName + " account. Open the link to confirm this address:\n\n" + link +
+			"\n\nThe link expires in 24 hours. You can keep building your page in the meantime; publishing needs a confirmed address." +
+			"\n\nIf you didn't sign up, ignore this message.\n"})
 }
 
 // sendMail delivers in the background so slow SMTP never blocks a request
@@ -232,7 +234,8 @@ func (s *Server) handleForgot(w http.ResponseWriter, r *http.Request) {
 			if tok, err := s.store.CreateUserToken(r.Context(), u.ID, "reset", store.ResetTokenTTL); err == nil {
 				link := s.cfg.BaseURL + "/app/reset?token=" + tok
 				s.sendMail(mail.Message{To: u.Email, Subject: "Reset your " + s.cfg.AppName + " password",
-					Body: "Choose a new password:\n\n" + link + "\n\nThe link expires in 1 hour. If you didn't ask for this, ignore this message.\n"})
+					Body: "Someone asked to reset the password for your " + s.cfg.AppName + " account. Choose a new one here:\n\n" + link +
+						"\n\nThe link expires in 1 hour. If that wasn't you, ignore this message and your password stays as it is.\n"})
 			}
 		}
 	}

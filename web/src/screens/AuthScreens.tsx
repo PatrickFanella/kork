@@ -132,7 +132,7 @@ export function SignupScreen() {
   return (
     <AuthLayout
       title="Create your account"
-      subtitle="One link for everything you make. Free, up to five pages."
+      subtitle="Free link pages. Start building now; a new account can publish after 24 hours."
       footer={
         <>
           Already have an account? <Link to="/login">Sign in</Link>
@@ -339,7 +339,7 @@ export function VerifyScreen() {
       )}
       {state === "done" && (
         <div className="stack">
-          <Notice tone="success">Thanks. You can now publish your pages.</Notice>
+          <Notice tone="success">That's your email confirmed. A new account can publish once it's 24 hours old.</Notice>
           <Link className="btn btn-primary btn-block" to="/">
             Go to your pages
           </Link>
