@@ -181,8 +181,8 @@ export function BlocksTab({ page, setPage, saved }: EditorProps) {
       {blocks.length === 0 && !adding && !importing ? (
         <div className="empty-state">
           <Icon name="blocks" size={32} />
-          <h2>Your page is empty</h2>
-          <p className="muted">Add your social profiles, links, payment handles and more.</p>
+          <h2>Nothing pinned up yet</h2>
+          <p className="muted">Start with the profile people ask you for most. Links, payment buttons, QR codes and the rest can follow.</p>
           <button type="button" className="btn btn-primary" onClick={() => setAdding({ step: "service" })}>
             Add your first profile
           </button>

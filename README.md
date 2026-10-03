@@ -1,6 +1,6 @@
 # Kork
 
-Kork (code name `zelda`) is a self-serve themed link-page service by SUBCULT. People sign up, add their socials, payment handles, crypto addresses, QR codes, embeds and contact card, pick a theme, and publish at `/{name}` or on their own domain.
+Kork (code name `zelda`) is a self-serve themed link-page service by SUBCULT. People sign up, add their socials, payment handles, crypto addresses, QR codes, embeds and contact card, pick a theme, and publish at `/{name}`. Custom domains are in the code but switched off on kork.subcult.tv.
 
 - **Go API + server-rendered pages.** Public pages are plain HTML and CSS with one small script for copy buttons, sharing and click counts. No React or third-party requests on visitor pages, apart from embeds a page owner adds.
 - **React editor** (`web/`) at `/app`, built into the Go binary.
@@ -10,7 +10,7 @@ Kork (code name `zelda`) is a self-serve themed link-page service by SUBCULT. Pe
 
 | Block | Examples |
 |---|---|
-| Service | 90+ entries: Instagram, TikTok, X, Bluesky, Mastodon, YouTube, Twitch, Spotify, Bandcamp, Patreon, Substack, Etsy, Cash App, PayPal, Venmo, Ko-fi, Buy Me a Coffee, Stripe links, Zelle, Bitcoin, Lightning, Ethereum, Monero, WhatsApp, Telegram, Signal, Discord, Calendly, GitHub, LinkedIn… |
+| Service | 92 entries: Instagram, TikTok, X, Bluesky, Mastodon, YouTube, Twitch, Spotify, Bandcamp, Patreon, Substack, Etsy, Cash App, PayPal, Venmo, Ko-fi, Buy Me a Coffee, Stripe links, Zelle, Bitcoin, Lightning, Ethereum, Monero, WhatsApp, Telegram, Signal, Discord, Calendly, GitHub, LinkedIn… |
 | Link | Any http(s), `mailto:`, `tel:` or `sms:` link, with optional thumbnail |
 | Embed | YouTube, Vimeo, Spotify, SoundCloud, Twitch, Apple Music |
 | QR code | Any text or URL; any link or service can also show its own QR |
