@@ -35,7 +35,7 @@ a { color: var(--ink); }
 .kicker { margin: 0 0 1rem; font: .85rem var(--mono); letter-spacing: .06em; }
 h1 { margin: 0 0 1.25rem; font: clamp(2.6rem, 6.2vw, 4.6rem)/.95 var(--display); text-transform: uppercase; letter-spacing: -.01em; }
 /* The landing headline is a full sentence, so it runs smaller than a slogan. */
-.hero h1 { font-size: clamp(2rem, 4.4vw, 3.3rem); line-height: 1; }
+.hero h1 { font-size: clamp(2rem, 4.4vw, 3.3rem); line-height: 1; text-wrap: balance; }
 .message h1 { text-transform: none; font-size: clamp(2.4rem, 6vw, 4rem); }
 .lede { max-width: 52ch; margin: 0 0 2rem; font-size: 1.15rem; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1.25rem; margin: 0; }

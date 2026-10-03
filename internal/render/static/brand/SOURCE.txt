@@ -1,1 +1,2 @@
 Kork brand assets copied from subcult-studio branding/2026-10-01-packs/brands/kork/product (commit 1a43028) plus Archivo Black (SIL OFL 1.1, see ArchivoBlack-OFL.txt). Regenerate in subcult-studio; do not edit these copies.
+og.png was replaced on 2026-10-03 with the re-rendered export from the combined subcult-tv repository, studio/branding/library/brands/kork/product/og.png (commit 2fbbd4c, sha256 0b7aa68182aa906f73750c738b020ec766396c54309c6feae7343756a2ce2757). favicon.svg, hero.svg and apple-touch-icon.png are unchanged.
