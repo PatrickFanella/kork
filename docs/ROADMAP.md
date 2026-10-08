@@ -2,7 +2,7 @@
 
 Written October 2, 2026. Each step is a Gitea issue; this file explains the order and the reasoning. Update both when plans change.
 
-Status checked October 8, 2026: the feature implementations through Phase 3 are in the code. Backups, monitoring, account controls, imports, previews, analytics, scheduling, additional blocks and Pro feature gates have closed issues. Production link screening now uses a populated PhishTank CSV cache, refreshed daily; a listed URL was rejected through the public API and a safe control was accepted. Terms/privacy remain a draft awaiting operator details and owner review. Stripe and Patreon are implemented but production credentials and real-provider qualification are pending. Custom domains (#13) and VPS migration (#20) are deferred at the owner's request for the current work.
+Status checked October 8, 2026: the feature implementations through Phase 3 are in the code. Backups, monitoring, account controls, imports, previews, analytics, scheduling, additional blocks and Pro feature gates have closed issues. Production link screening now uses a populated PhishTank CSV cache, refreshed daily; a listed URL was rejected through the public API and a safe control was accepted. Terms/privacy version `2026-10-08` is live with the owner's operator, jurisdiction, age and contact choices. The owner approved $5/month or $48/year through UNDERTOW Stripe and SUBCULT Backer access through Patreon, with scheduled links free and a five-page Free limit. Stripe's test and live catalogs are prepared; server credentials and real-provider subscription, webhook and OAuth qualification are pending. See [billing catalog](billing-catalog.md). Custom domains (#13) and VPS migration (#20) are deferred at the owner's request for the current work.
 
 ## Where Kork is now
 
@@ -62,6 +62,6 @@ Features that make Kork worth choosing over an existing link page. These can run
 ## Decisions only the owner can make
 
 - Where paid Kork runs (#6).
-- Billing route and prices: Patreon, Stripe or both (#15).
+- Billing route and prices (#15): approved October 8, 2026 as UNDERTOW Stripe at $5/month or $48/year, plus SUBCULT Backer membership.
 - Enabling Cloudflare for SaaS and accepting its per-hostname pricing (#13).
-- Final wording of the terms and privacy policy (#4).
+- Policy details (#4): SUBCULT, Illinois/USA, minimum age 18 and `info@subcult.tv`; published as version `2026-10-08`. Final text is available for owner review.
