@@ -42,9 +42,10 @@ behavior and policies.
 
 ## Before you publish
 
-New accounts wait **24 hours** before publishing. Custom domains and paid
-plans are not available on the public service, and phishing screening is not
-active. You can export your account as a ZIP or delete it.
+New accounts wait **24 hours** before publishing. Saved links are checked
+against PhishTank's verified phishing URLs; this list cannot catch every threat.
+Custom domains and paid plans are not available on the public service.
+You can export your account as a ZIP or delete it.
 
 Built by [SUBCULT](https://subcult.tv). For self-hosting, setup, tests and
 deployment, use the [development guide](DEVELOPMENT.md). The implementation

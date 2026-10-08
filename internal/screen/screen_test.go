@@ -78,6 +78,45 @@ func TestBlocklistRefreshAndLoad(t *testing.T) {
 	}
 }
 
+func TestPhishTankFeed(t *testing.T) {
+	header := "phish_id,url,phish_detail_url,submission_time,verified,verification_time,online,target\n"
+	feed := header + "1,https://shared.example/phish,https://phishtank.org/phish_detail.php?phish_id=1,2026-10-08,yes,2026-10-08,yes,Bank\n" +
+		"2,https://shared.example/unverified,,,,,yes,Bank\n" +
+		"3,https://shared.example/offline,,,yes,,no,Bank\n" +
+		"4,https://shared.example/%invalid,,,yes,,yes,Bank\n"
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.UserAgent(), "Kork/") {
+			t.Error("feed request missing descriptive user agent")
+		}
+		io.WriteString(w, feed)
+	}))
+	defer ts.Close()
+	file := filepath.Join(t.TempDir(), "feed.csv")
+	b := &Blocklist{File: file, FeedURL: ts.URL, Client: ts.Client()}
+	if err := b.Refresh(t.Context()); err != nil || b.Len() != 1 {
+		t.Fatalf("CSV refresh: %v, entries %d", err, b.Len())
+	}
+	got, _ := b.Check(t.Context(), []string{"https://shared.example/phish", "https://shared.example/other"})
+	if !got["https://shared.example/phish"].Unsafe || got["https://shared.example/other"].Unsafe {
+		t.Fatalf("CSV must block the listed URL without blocking its shared host: %v", got)
+	}
+	saved, _ := os.ReadFile(file)
+	for _, broken := range []string{header + "1,\"unterminated", "<html><body>Rate limited</body></html>", strings.Repeat("x", 65<<10)} {
+		feed = broken
+		if err := b.Refresh(t.Context()); err == nil || b.Len() != 1 {
+			t.Fatalf("invalid feed replaced current list: %v, entries %d", err, b.Len())
+		}
+		now, _ := os.ReadFile(file)
+		if string(now) != string(saved) {
+			t.Fatal("invalid feed overwrote persistent cache")
+		}
+	}
+	fresh := &Blocklist{File: file}
+	if err := fresh.Load(); err != nil || fresh.Len() != 1 {
+		t.Fatalf("CSV cache load: %v, entries %d", err, fresh.Len())
+	}
+}
+
 func TestSafeBrowsing(t *testing.T) {
 	var got sbRequest
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

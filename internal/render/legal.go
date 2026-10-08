@@ -9,7 +9,7 @@ import (
 // TermsVersion identifies the current terms and privacy text. Signup records
 // it. Change it whenever the wording changes; drop "-draft" once the owner
 // has approved the text.
-const TermsVersion = "2026-10-02-draft"
+const TermsVersion = "2026-10-08-draft"
 
 // Legal is the input to the terms and privacy template.
 type Legal struct {
