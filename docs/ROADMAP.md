@@ -2,6 +2,8 @@
 
 Written October 2, 2026. Each step is a Gitea issue; this file explains the order and the reasoning. Update both when plans change.
 
+Status checked October 8, 2026: the feature implementations through Phase 3 are in the code. Backups, monitoring, account controls, imports, previews, analytics, scheduling, additional blocks and Pro feature gates have closed issues. Production link screening now uses a populated PhishTank CSV cache, refreshed daily; a listed URL was rejected through the public API and a safe control was accepted. Terms/privacy remain a draft awaiting operator details and owner review. Stripe and Patreon are implemented but production credentials and real-provider qualification are pending. Custom domains (#13) and VPS migration (#20) are deferred at the owner's request for the current work.
+
 ## Where Kork is now
 
 Kork (code name `zelda`) is live at https://kork.subcult.tv: self-serve signup with email verification, 92 catalog services, 11 block types, 10 themes, QR codes, uploads, anonymous daily stats, reports and admin suspension. It runs on the NUC behind the Cloudflare tunnel and Almaz Caddy. Nightly backups go to the NUC and Almaz. Custom domains exist in the code but are switched off, because the tunnel only serves hostnames it lists.
