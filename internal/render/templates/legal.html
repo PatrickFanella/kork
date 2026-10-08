@@ -59,7 +59,12 @@
 <p>Only upload content you have the right to share.</p>
 
 <h2>Links, payments and embeds</h2>
-<p>Payment buttons link straight to services such as Cash App, PayPal or Venmo, or show an address to copy. {{.AppName}} doesn't handle money, takes no cut and isn't part of any transaction between you and your visitors. We don't control the sites and players that pages link to or embed.</p>
+<p>Payment buttons on your page link straight to services such as Cash App, PayPal or Venmo, or show an address to copy. {{.AppName}} takes no cut and isn't part of any transaction between you and your visitors. We don't control the sites and players that pages link to or embed.</p>
+
+<h2>Pro subscriptions and supporter access</h2>
+<p>When paid plans are available, Stripe processes payments for {{.AppName}} Pro. Checkout shows the price and billing interval before you subscribe. Subscriptions renew until canceled. You can manage your subscription or cancel future renewals from Settings. Canceling keeps Pro available through the paid period; deleting your account cancels its subscription before the account is removed.</p>
+<p>A qualifying SUBCULT Patreon membership can also unlock Pro when you connect it in Settings. We check eligibility daily. If eligibility ends, access continues for a seven-day grace period. One Patreon account can be connected to one {{.AppName}} account at a time.</p>
+<p>These subscriptions pay for {{.AppName}} itself. They do not affect payments visitors make through the links on your page. Any rights you have under applicable consumer law still apply.</p>
 
 <h2>No warranty</h2>
 <p>{{.AppName}} is provided as is. We don't guarantee that it will be available, fast or free of errors, and we may change or remove features. Keep your own copy of anything important; you can download your data from Settings at any time.</p>
@@ -100,16 +105,19 @@
   <li>a record of each signed-in session, and single-use links for email confirmation, password reset and email changes. These are stored as hashes and expire;</li>
   <li>a new email address you asked to switch to, until you confirm it;</li>
   <li>email addresses collected by your sign-up blocks, and your Brevo API key if you send sign-ups to Brevo (encrypted, and never shown again after you enter it).</li>
+  <li>your plan and its source and expiry; if you subscribe through Stripe, customer, subscription and price identifiers, subscription status, billing-period dates, cancellation state and payment-failure timestamps;</li>
+  <li>if you connect Patreon, your Patreon user identifier, membership eligibility and check dates, and an encrypted refresh token used to check membership again. We do not store your Patreon password;</li>
+  <li>identifiers and types of processed Stripe webhook events, to prevent duplicate processing. Card numbers and security codes are handled by Stripe, not stored by {{.AppName}}.</li>
 </ul>
 
 <h2>If you visit a page</h2>
 <ul>
-  <li>We don't store visitors' IP addresses, cookies or browser details.</li>
+  <li>{{.AppName}}'s analytics database does not store visitors' IP addresses, cookies or browser details.</li>
   <li>We count page views and link clicks as one number per page or link per day. Nothing in that count identifies a visitor.</li>
   <li>To skip bots, the server checks the browser's user agent when counting and then discards it.</li>
   <li>To limit abuse, the server keeps IP addresses in memory for up to an hour to rate-limit signups, sign-ins, password resets, reports and click counts. They are not written to the database or logs.</li>
   <li>The {{.AppName}} application logs each request's method, host, path, status and duration, without IP addresses or user agents.</li>
-  <!-- TODO(owner): confirm the reverse proxy in front of the app (Caddy on Almaz) does not keep access logs with IP addresses, or describe them here. -->
+  <li>Our reverse proxy can log request details when an upstream request fails, including the visitor's IP address and browser headers. Query strings and Referer headers are redacted. These operational logs rotate by size, retaining up to three 50 MB files; they have no fixed age limit. Successful requests to {{.AppName}} are not access-logged by this proxy.</li>
   <li>If you report a page, we store the page, the reason and the details you write, but not who sent it.</li>
 </ul>
 
@@ -126,12 +134,15 @@
 <ul>
   <li><strong>Cloudflare</strong> carries all traffic to {{.AppName}}. It sees visitors' IP addresses and request details in order to deliver pages.</li>
   <li><strong>Brevo</strong> sends account emails (confirmation, password reset and email change) and mailing-list confirmation links, so it receives the recipient's email address and the message.</li>
+  <li><strong>Stripe</strong>, when billing is enabled, processes Pro subscription payments and provides Checkout and the customer portal. It receives your billing information and the account identifiers needed to connect a subscription to {{.AppName}}.</li>
+  <li><strong>Patreon</strong>, when you choose to connect it, authorizes access to your identity and qualifying SUBCULT membership. {{.AppName}} uses that information to decide whether to grant Pro.</li>
   <li>{{.AppName}} runs on a server operated by SUBCULT. The database and uploaded images are stored there.</li>
 </ul>
 <p>We don't sell your data and {{.AppName}} has no ads.</p>
 
 <h2>How long we keep it</h2>
-<p>We keep account data for as long as the account exists. When you delete your account, your pages, blocks, domains, uploaded images, stats, mailing-list addresses, sessions and email address are removed immediately. Deleted data can remain in our backups until they rotate out: we keep 14 nightly copies, so about two weeks.</p>
+<p>We keep account data for as long as the account exists. When you delete your account, your pages, blocks, domains, uploaded images, stats, mailing-list addresses, sessions, billing connection and email address are removed from the active database. Stripe and Patreon retain their own records under their policies. Processed Stripe event identifiers are retained separately for duplicate prevention and are not deleted with an account.</p>
+<p>The application keeps 14 nightly copies of its backups. Encrypted infrastructure backups can retain earlier copies under their separate retention schedules, so account deletion does not immediately remove data from every backup. Backups are used for recovery, not to republish deleted accounts. Reverse-proxy logs follow the size-based rotation described above.</p>
 
 <h2>Your choices</h2>
 <ul>

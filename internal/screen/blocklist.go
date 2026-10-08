@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"io"
@@ -28,6 +29,8 @@ const maxFeedBytes = 64 << 20
 // ("0.0.0.0 evil.example", as in the URLhaus host file), or a full http(s) URL
 // ("https://host/path", as in the OpenPhish feed). URL entries only match that
 // URL, so a phishing page on a shared host doesn't block the whole host.
+// PhishTank's online-valid.csv format is also supported; only verified,
+// online entries are loaded and they match exact URLs, never entire hosts.
 type Blocklist struct {
 	// File is read at startup and rewritten after each successful download.
 	File string
@@ -44,7 +47,8 @@ type Blocklist struct {
 // NewBlocklist returns a blocklist holding entries (useful for tests).
 func NewBlocklist(entries ...string) *Blocklist {
 	b := &Blocklist{}
-	b.set(parseList(strings.NewReader(strings.Join(entries, "\n"))))
+	l, _ := parseList(strings.NewReader(strings.Join(entries, "\n")))
+	b.set(l)
 	return b
 }
 
@@ -81,7 +85,17 @@ func (b *Blocklist) Load() error {
 		return err
 	}
 	defer f.Close()
-	list := parseList(io.LimitReader(f, maxFeedBytes))
+	data, err := io.ReadAll(io.LimitReader(f, maxFeedBytes+1))
+	if err != nil {
+		return err
+	}
+	if len(data) > maxFeedBytes {
+		return errors.New("blocklist file: larger than 64 MB")
+	}
+	list, err := parseList(bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
 	b.set(list)
 	return nil
 }
@@ -97,6 +111,7 @@ func (b *Blocklist) Refresh(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	req.Header.Set("User-Agent", "Kork/0.1 (+https://kork.subcult.tv)")
 	res, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("blocklist download: %w", err)
@@ -112,11 +127,13 @@ func (b *Blocklist) Refresh(ctx context.Context) error {
 	if len(data) > maxFeedBytes {
 		return errors.New("blocklist download: larger than 64 MB")
 	}
-	list := parseList(bytes.NewReader(data))
+	list, err := parseList(bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("blocklist download: %w", err)
+	}
 	if len(list.hosts)+len(list.urls) == 0 {
 		return errors.New("blocklist download: no entries, keeping the current list")
 	}
-	b.set(list)
 	if b.File != "" {
 		tmp := b.File + ".tmp"
 		if err := os.MkdirAll(filepath.Dir(b.File), 0o750); err != nil {
@@ -125,8 +142,11 @@ func (b *Blocklist) Refresh(ctx context.Context) error {
 		if err := os.WriteFile(tmp, data, 0o640); err != nil {
 			return err
 		}
-		return os.Rename(tmp, b.File)
+		if err := os.Rename(tmp, b.File); err != nil {
+			return err
+		}
 	}
+	b.set(list)
 	return nil
 }
 
@@ -179,9 +199,36 @@ func (b *Blocklist) set(l parsedList) {
 	b.mu.Unlock()
 }
 
-func parseList(r io.Reader) parsedList {
+func parseList(r io.Reader) (parsedList, error) {
 	l := parsedList{hosts: map[string]bool{}, urls: map[string]bool{}}
-	sc := bufio.NewScanner(r)
+	br := bufio.NewReader(r)
+	header, _ := br.Peek(len("phish_id,url,"))
+	if string(header) == "phish_id,url," {
+		cr := csv.NewReader(br)
+		h, err := cr.Read()
+		if err != nil || len(h) != 8 || h[4] != "verified" || h[6] != "online" {
+			return l, errors.New("invalid PhishTank CSV header")
+		}
+		for {
+			row, err := cr.Read()
+			if errors.Is(err, io.EOF) {
+				return l, nil
+			}
+			if err != nil {
+				return l, fmt.Errorf("invalid PhishTank CSV: %w", err)
+			}
+			if row[4] == "yes" && row[6] == "yes" {
+				n := normalizeURL(row[1])
+				if n == "" {
+					// The live feed can contain malformed percent escapes.
+					// Skip unusable URLs without discarding valid records.
+					continue
+				}
+				l.urls[n] = true
+			}
+		}
+	}
+	sc := bufio.NewScanner(br)
 	sc.Buffer(make([]byte, 64<<10), 64<<10)
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
@@ -201,12 +248,24 @@ func parseList(r io.Reader) parsedList {
 			continue
 		}
 		host := strings.TrimSuffix(strings.ToLower(entry), ".")
-		if host == "" || host == "localhost" || strings.ContainsAny(host, "/?#@ ") {
+		if !validListHost(host) {
 			continue
 		}
 		l.hosts[host] = true
 	}
-	return l
+	return l, sc.Err()
+}
+
+func validListHost(host string) bool {
+	if host == "" || host == "localhost" || !strings.Contains(host, ".") {
+		return false
+	}
+	for _, c := range host {
+		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' || c == '.') {
+			return false
+		}
+	}
+	return true
 }
 
 // normalizeURL lowercases the scheme and host and drops the fragment and a
