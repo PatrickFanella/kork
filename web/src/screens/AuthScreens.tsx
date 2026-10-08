@@ -108,7 +108,7 @@ export function SignupScreen() {
   const [fields, setFields] = useState<FieldErrors>({});
   const [general, setGeneral] = useState<string | null>(null);
   const pwProblem = passwordProblem(password);
-  const termsProblem = agreed ? null : "Agree to the Terms and Privacy Policy to create an account.";
+  const termsProblem = agreed ? null : "Confirm you are at least 18 and agree to the Terms and Privacy Policy to create an account.";
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -163,7 +163,7 @@ export function SignupScreen() {
               aria-describedby={touched && termsProblem ? "terms-err" : undefined}
             />
             <span>
-              I agree to the{" "}
+              I am at least 18 years old and agree to the{" "}
               <a href="/terms" target="_blank" rel="noopener">
                 Terms
               </a>{" "}

@@ -28,6 +28,7 @@ func newBillingClients(cfg *config.Config) *billingClients {
 		patreon: billing.NewPatreon(cfg.PatreonClientID, cfg.PatreonClientSecret, cfg.BaseURL+"/app/patreon/callback"),
 		limit:   newLimiter(20, time.Hour),
 	}
+	b.stripe.PortalConfiguration = cfg.StripePortalConfiguration
 	if len(cfg.SecretKey) == seal.KeySize {
 		b.sealer, _ = seal.New(cfg.SecretKey)
 	}

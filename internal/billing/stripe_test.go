@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 )
@@ -78,6 +79,9 @@ func TestStripeClient(t *testing.T) {
 	var got url.Values
 	var auth, path string
 	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Stripe-Version") != StripeAPIVersion {
+			t.Error("Stripe request missing pinned API version")
+		}
 		auth, path = r.Header.Get("Authorization"), r.Method+" "+r.URL.Path
 		r.ParseForm()
 		got = r.PostForm
@@ -112,11 +116,18 @@ func TestStripeClient(t *testing.T) {
 	if _, err := c.CreateCheckout(ctx, CheckoutParams{UserID: "u2", Price: "price_y", Email: "a@example.com"}); err != nil {
 		t.Fatal(err)
 	}
-	if got.Get("customer") != "" || got.Get("customer_email") != "a@example.com" || got.Has("automatic_tax[enabled]") {
+	if got.Get("customer") != "" || got.Get("customer_email") != "a@example.com" || got.Has("automatic_tax[enabled]") || got.Get("managed_payments[enabled]") != "false" || !strings.HasPrefix(got.Get("integration_identifier"), "kork-") || len(got.Get("integration_identifier")) != 13 {
 		t.Fatalf("new customer form: %v", got)
 	}
 	if u, err := c.CreatePortal(ctx, "cus_1", "https://kork.example/app/settings"); err != nil || u == "" || got.Get("customer") != "cus_1" {
 		t.Fatalf("portal: %q %v %v", u, err, got)
+	}
+	if got.Has("configuration") {
+		t.Fatal("unconfigured portal should use the account default")
+	}
+	c.PortalConfiguration = "bpc_kork"
+	if _, err := c.CreatePortal(ctx, "cus_1", "https://kork.example/app/settings"); err != nil || got.Get("configuration") != "bpc_kork" {
+		t.Fatalf("Kork portal configuration: %v %v", err, got)
 	}
 	if err := c.CancelSubscription(ctx, "sub_gone"); err != nil || path != "DELETE /v1/subscriptions/sub_gone" {
 		t.Fatalf("cancel missing subscription: %v %s", err, path)

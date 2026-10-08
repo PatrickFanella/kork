@@ -68,7 +68,7 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !c.AcceptTerms {
-		writeErr(w, http.StatusUnprocessableEntity, "terms_required", "agree to the Terms and Privacy Policy to continue", "accept_terms")
+		writeErr(w, http.StatusUnprocessableEntity, "terms_required", "confirm you are at least 18 and agree to the Terms and Privacy Policy to continue", "accept_terms")
 		return
 	}
 	hash, err := hashPassword(c.Password)

@@ -41,11 +41,17 @@ func TestLegalPagesAndTermsAcceptance(t *testing.T) {
 		if code != 200 {
 			t.Fatalf("%s: %d", path, code)
 		}
-		for _, want := range []string{"legal@example.org", render.TermsVersion, "DRAFT FOR OWNER REVIEW"} {
+		for _, want := range []string{"legal@example.org", render.TermsVersion} {
 			if !strings.Contains(body, want) {
 				t.Errorf("%s missing %q", path, want)
 			}
 		}
+		if strings.Contains(body, "DRAFT FOR OWNER REVIEW") || strings.Contains(body, "To be added.") {
+			t.Errorf("%s still contains draft placeholders", path)
+		}
+	}
+	if _, body, _ := anon.get("/terms"); !strings.Contains(body, "at least 18 years old") || !strings.Contains(body, "State of Illinois") {
+		t.Error("terms missing approved age or governing law")
 	}
 	if _, body, _ := anon.get("/privacy"); !strings.Contains(body, "14 nightly copies") || !strings.Contains(body, "argon2id") {
 		t.Error("privacy policy missing backup retention or password hashing")

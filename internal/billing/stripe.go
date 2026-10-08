@@ -3,6 +3,7 @@ package billing
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,9 @@ import (
 // StripeAPI is Stripe's API origin.
 const StripeAPI = "https://api.stripe.com"
 
+// StripeAPIVersion keeps application requests consistent with its webhooks.
+const StripeAPIVersion = "2026-09-30.endive"
+
 // StripeBuffer extends a paid period so a renewal that is charged a little
 // late (Stripe retries, webhook delays) doesn't drop Pro for a few hours.
 const StripeBuffer = 24 * time.Hour
@@ -26,9 +30,10 @@ const maxResponse = 1 << 20
 // Stripe calls the Stripe API with a secret key. Requests are form-encoded
 // per Stripe's API; there is no SDK dependency.
 type Stripe struct {
-	Key     string
-	BaseURL string // StripeAPI unless a test replaces it
-	HTTP    *http.Client
+	Key                 string
+	BaseURL             string // StripeAPI unless a test replaces it
+	HTTP                *http.Client
+	PortalConfiguration string
 }
 
 // NewStripe builds a client for the live API.
@@ -68,6 +73,7 @@ func (c *Stripe) call(ctx context.Context, method, path string, form url.Values,
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+c.Key)
+	req.Header.Set("Stripe-Version", StripeAPIVersion)
 	if form != nil {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
@@ -107,6 +113,17 @@ type CheckoutParams struct {
 // subscription's metadata so every later event can be matched to the account.
 func (c *Stripe) CreateCheckout(ctx context.Context, p CheckoutParams) (string, error) {
 	f := url.Values{}
+	var suffix [8]byte
+	if _, err := rand.Read(suffix[:]); err != nil {
+		return "", err
+	}
+	for i := range suffix {
+		suffix[i] = 'a' + suffix[i]%26
+	}
+	f.Set("integration_identifier", "kork-"+string(suffix[:]))
+	// This integration uses direct Stripe Billing, with operator-configured
+	// tax settings. Do not inherit a shared account's Managed Payments default.
+	f.Set("managed_payments[enabled]", "false")
 	f.Set("mode", "subscription")
 	f.Set("line_items[0][price]", p.Price)
 	f.Set("line_items[0][quantity]", "1")
@@ -142,6 +159,9 @@ func (c *Stripe) CreatePortal(ctx context.Context, customerID, returnURL string)
 	f := url.Values{}
 	f.Set("customer", customerID)
 	f.Set("return_url", returnURL)
+	if c.PortalConfiguration != "" {
+		f.Set("configuration", c.PortalConfiguration)
+	}
 	var out struct{ URL string }
 	if err := c.call(ctx, http.MethodPost, "/v1/billing_portal/sessions", f, &out); err != nil {
 		return "", err
