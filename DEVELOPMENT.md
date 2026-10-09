@@ -90,7 +90,7 @@ The `.env` file is not backed up; recreate it from `.env.example` (a new `POSTGR
 
 ### Terms and privacy
 
-`/terms` and `/privacy` are rendered from `internal/render/templates/legal.html`. The text is a draft awaiting owner review; `render.TermsVersion` (`2026-10-02-draft`) is stored with each new signup, so change it whenever the wording changes. The privacy policy describes what the code stores; update it when that changes. `ZELDA_CONTACT_EMAIL` (default `hello@subcult.tv`) is the contact address shown on both pages.
+`/terms` and `/privacy` are rendered from `internal/render/templates/legal.html`. The owner approved SUBCULT as operator, Illinois/USA governing law, an 18-year minimum and `info@subcult.tv` as contact on October 8, 2026. `render.TermsVersion` (`2026-10-08`) is stored with each new signup, so change it whenever the wording changes. The signup confirmation includes the age requirement; no birth date is collected. The privacy policy describes what the code stores; update it when that changes. `ZELDA_CONTACT_EMAIL` (default `info@subcult.tv`) is the contact address shown on both pages.
 
 Users manage their account at `/app/settings`: change password or email, download a ZIP of their data, or delete the account.
 

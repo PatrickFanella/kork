@@ -2,7 +2,7 @@
 
 Kork can sell Pro through Stripe subscriptions and unlock it for SUBCULT Patreon members. Either can be used alone. Each stays off until all of its settings are present; with a provider off, its buttons are hidden in the editor and its endpoints return 404.
 
-Prices and tier IDs are not in the code. Stripe charges the price IDs you configure, and the editor shows the labels you set. The research in `docs/research/pricing-2026-10.md` recommends $5/month or $48/year, and the Backer tier for Patreon; nothing below depends on those values.
+Owner decisions, October 8, 2026: Pro costs **$5/month or $48/year**, a qualifying SUBCULT **Backer** membership unlocks Pro, scheduled links remain free, and Free accounts keep their **five-page limit**. Stripe uses the **UNDERTOW** account (`acct_1ULZ9hElO9mtgE8Q`) and its test mode. Prices and tier IDs are configured by environment; the editor's labels must match the actual prices.
 
 Keep secrets in the server's `.env` (or the existing secret store), never in this repository. Do everything in Stripe's test mode first, then repeat it in live mode.
 
@@ -44,7 +44,7 @@ Checkout creates the customer, so Kork doesn't need customer write access.
    - `invoice.payment_failed`
 3. Copy the endpoint's signing secret (`whsec_...`) into `ZELDA_STRIPE_WEBHOOK_SECRET`.
 
-Any API version works; Kork reads the subscription period end from both the old and new locations.
+Use API version `2026-09-30.endive`, matching Kork's pinned API requests. Kork also reads legacy subscription period-end fields for stored events.
 
 The webhook must reach the server directly. If a proxy or tunnel rewrites the request body, the signature check fails and Stripe shows `400` responses in the endpoint's event log.
 
@@ -52,12 +52,16 @@ The webhook must reach the server directly. If a proxy or tunnel rewrites the re
 
 Under **Settings → Billing → Customer portal**:
 
+On the shared UNDERTOW account, create a Kork-specific portal configuration and set its `bpc_...` ID as `ZELDA_STRIPE_PORTAL_CONFIGURATION`. This lets Kork select its own policy links and cancellation settings without changing the portal used by another product. Without that variable, Kork uses the account's default configuration.
+
 1. Turn on: update payment methods, view invoice history, cancel subscriptions.
 2. Set cancellation to **at the end of the billing period**. Kork keeps Pro until the paid period ends even if a subscription is canceled immediately.
 3. Under subscription updates, allow switching between the Kork Pro monthly and yearly prices if you want customers to change plans themselves.
 4. Set the business name, privacy policy link (`https://kork.subcult.tv/privacy`) and terms link (`https://kork.subcult.tv/terms`).
 
 ### Tax
+
+Kork explicitly disables Managed Payments on each Checkout Session. UNDERTOW currently enables it by default, but Kork uses direct Stripe Billing with SUBCULT as the operator. This setting does not change another product's account defaults.
 
 `ZELDA_STRIPE_AUTOMATIC_TAX=true` turns on Stripe Tax in Checkout, and Checkout then asks for a billing address. Set it only after Stripe Tax is configured: origin address, product tax code (software as a service) and the registrations where Kork collects tax. Whether Kork must register anywhere has not been assessed (see the pricing research). Leave it `false` until that is decided.
 

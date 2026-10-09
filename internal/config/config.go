@@ -59,6 +59,8 @@ type Config struct {
 	StripeWebhookSecret string
 	StripePriceMonthly  string
 	StripePriceAnnual   string
+	// StripePortalConfiguration selects Kork's portal on a shared Stripe account.
+	StripePortalConfiguration string
 	// StripeAutomaticTax turns on Stripe Tax in Checkout.
 	StripeAutomaticTax bool
 	// PriceDisplayMonthly and PriceDisplayAnnual are the labels on the
@@ -101,7 +103,7 @@ func Load() (*Config, error) {
 		SMTPUser:     env("ZELDA_SMTP_USER", ""),
 		SMTPPass:     env("ZELDA_SMTP_PASSWORD", ""),
 		MailFrom:     env("ZELDA_MAIL_FROM", ""),
-		ContactEmail: env("ZELDA_CONTACT_EMAIL", "hello@subcult.tv"),
+		ContactEmail: env("ZELDA_CONTACT_EMAIL", "info@subcult.tv"),
 	}
 	c.CustomDomains = env("ZELDA_CUSTOM_DOMAINS", "true") == "true"
 	c.CloudflareToken = env("ZELDA_CLOUDFLARE_TOKEN", "")
@@ -180,6 +182,7 @@ func (c *Config) loadBilling() error {
 	c.StripeWebhookSecret = env("ZELDA_STRIPE_WEBHOOK_SECRET", "")
 	c.StripePriceMonthly = env("ZELDA_STRIPE_PRICE_MONTHLY", "")
 	c.StripePriceAnnual = env("ZELDA_STRIPE_PRICE_ANNUAL", "")
+	c.StripePortalConfiguration = env("ZELDA_STRIPE_PORTAL_CONFIGURATION", "")
 	c.StripeAutomaticTax = env("ZELDA_STRIPE_AUTOMATIC_TAX", "false") == "true"
 	c.PriceDisplayMonthly = env("ZELDA_PRICE_DISPLAY_MONTHLY", "")
 	c.PriceDisplayAnnual = env("ZELDA_PRICE_DISPLAY_ANNUAL", "")
