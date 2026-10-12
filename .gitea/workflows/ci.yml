@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: node:22-bookworm
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: zelda
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: zelda_test
+        options: >-
+          --health-cmd "pg_isready -U zelda -d zelda_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      ZELDA_TEST_DATABASE_URL: postgres://zelda:ci-only-password@postgres:5432/zelda_test?sslmode=disable
+    steps:
+      - name: Check out source
+        uses: https://github.com/actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: https://github.com/actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Download and verify Go dependencies
+        run: |
+          go mod download
+          go mod verify
+      - name: Check Go formatting and vet
+        run: make lint
+      - name: Install editor dependencies
+        working-directory: web
+        run: npm ci
+      - name: Check editor types and tests
+        run: make test-web
+      - name: Build production editor
+        working-directory: web
+        run: npm run build
+      - name: Run Go unit and database integration tests
+        run: go test -race -count=1 ./...
+      - name: Build server with embedded editor
+        run: CGO_ENABLED=0 go build -trimpath -o bin/zelda ./cmd/zelda

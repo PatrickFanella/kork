@@ -48,6 +48,18 @@ make test       # Go unit tests, the Postgres end-to-end test, editor typecheck 
 
 The end-to-end test (`internal/server/server_test.go`) drops and recreates the schema of the database in `ZELDA_TEST_DATABASE_URL`. `make test-go` points it at a separate `zelda_test` database.
 
+### Continuous integration
+
+Gitea Actions runs [CI](.gitea/workflows/ci.yml) on pushes, pull requests, and
+manual dispatches. It checks Go formatting and vet, verifies Go modules, installs
+the editor's locked dependencies, runs TypeScript and Vitest checks, and builds
+the production editor. It then runs all Go tests with the race detector against
+a fresh PostgreSQL 17 service and builds the server with the editor embedded.
+The job uses Node 22 and the Go version declared in `go.mod`.
+
+The database and its credentials exist only for the CI job. No repository
+secrets are required. CI validates the application; it does not deploy it.
+
 ## Deploying
 
 `docker compose up -d --build` runs Postgres, the app, and Caddy. Copy `.env.example` to `.env` first.
