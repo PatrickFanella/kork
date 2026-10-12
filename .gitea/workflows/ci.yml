@@ -2,8 +2,12 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   check:
@@ -39,11 +43,16 @@ jobs:
         run: |
           go mod download
           go mod verify
+      - name: Check reachable Go vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
       - name: Check Go formatting and vet
         run: make lint
       - name: Install editor dependencies
         working-directory: web
         run: npm ci
+      - name: Check editor dependency vulnerabilities
+        working-directory: web
+        run: npm audit --audit-level=high
       - name: Check editor types and tests
         run: make test-web
       - name: Build production editor
