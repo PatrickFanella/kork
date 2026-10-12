@@ -20,12 +20,11 @@ jobs:
           POSTGRES_PASSWORD: ci-only-password
           POSTGRES_DB: zelda_test
         options: >-
+          --label kork.ci-database=${{ github.run_id }}-${{ github.run_attempt }}
           --health-cmd "pg_isready -U zelda -d zelda_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 12
-    env:
-      ZELDA_TEST_DATABASE_URL: postgres://zelda:ci-only-password@postgres:5432/zelda_test?sslmode=disable
     steps:
       - name: Check out source
         uses: https://github.com/actions/checkout@v4
@@ -51,6 +50,12 @@ jobs:
         working-directory: web
         run: npm run build
       - name: Run Go unit and database integration tests
-        run: go test -race -count=1 ./...
+        env:
+          TEST_DATABASE_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          ZELDA_TEST_DATABASE_URL="$(node scripts/ci-database.mjs)"
+          export ZELDA_TEST_DATABASE_URL
+          test -n "$ZELDA_TEST_DATABASE_URL"
+          go test -race -count=1 ./...
       - name: Build server with embedded editor
         run: CGO_ENABLED=0 go build -trimpath -o bin/zelda ./cmd/zelda
