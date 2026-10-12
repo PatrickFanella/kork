@@ -144,3 +144,5 @@ docs/api.md        API contract between editor and server
 docs/billing.md    Stripe and Patreon setup for the owner
 deploy/Caddyfile   TLS and on-demand certificates
 ```
+
+CI uses Go 1.26.9 and checks reachable Go advisories with pinned govulncheck 1.7.0. The editor audit rejects high/critical findings, including development dependencies. Main pushes and all PRs run the single test/build job; feature pushes do not duplicate PR runs. The job binds its disposable PostgreSQL service by run/attempt, forces fresh race tests, and builds the embedded editor/server. Runtime provider/payment and browser acceptance remain separate.
