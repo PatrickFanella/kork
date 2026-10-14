@@ -201,6 +201,8 @@ func (s *Server) mainRoutes() *http.ServeMux {
 	m.HandleFunc("GET /app/", s.handleEditor)
 
 	// Public
+	m.HandleFunc("GET /robots.txt", s.handleRobots)
+	m.HandleFunc("GET /sitemap.xml", s.handleSitemap)
 	m.Handle("GET /static/", staticHandler())
 	m.HandleFunc("GET /u/{id}", s.handleServeUpload)
 	m.HandleFunc("POST /t/{id}", s.handleTrack)
