@@ -9,6 +9,8 @@
 <link rel="icon" href="/static/brand/favicon.svg?v={{.AssetVersion}}" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon.png?v={{.AssetVersion}}">
 {{if .Landing}}
+<link rel="canonical" href="{{.BaseURL}}/">
+<meta name="robots" content="index, follow, max-image-preview:large">
 <meta property="og:type" content="website">
 <meta property="og:title" content="{{.AppName}}: a free link page by SUBCULT">
 <meta property="og:description" content="Socials, payment buttons that open your own accounts, QR codes and tour dates at one address. Free, and no cut of your tips.">
@@ -20,6 +22,8 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="{{.BaseURL}}/static/brand/og.png">
 <meta name="twitter:image:alt" content="Kork: all of it, pinned to one link. Socials, payments, QR codes and more on one page.">
+{{else}}
+<meta name="robots" content="noindex, follow">
 {{end}}
 <link rel="stylesheet" href="/static/site.css?v={{.AssetVersion}}">
 </head>
