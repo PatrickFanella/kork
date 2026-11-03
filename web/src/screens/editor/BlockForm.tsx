@@ -9,6 +9,7 @@ import { LinkPreviewHelper } from "./LinkPreviewHelper";
 import { scheduleError, type BlockSchedule } from "../../lib/schedule";
 import { ScheduleFields } from "./ScheduleFields";
 import { ServiceMonogram } from "./ServicePicker";
+import { useUnsaved } from "../../lib/unsaved";
 
 interface BlockFormProps {
   type: BlockType;
@@ -50,6 +51,9 @@ export function BlockForm({
   }));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [general, setGeneral] = useState<string | null>(null);
+  // Compare with the values the form opened with.
+  const [opened] = useState(() => JSON.stringify([data, schedule]));
+  useUnsaved(JSON.stringify([data, schedule]) !== opened);
   const [busy, setBusy] = useState(false);
 
   const set = (key: string, value: BlockValue) => {

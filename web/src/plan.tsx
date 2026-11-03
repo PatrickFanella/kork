@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode, useRef } from "react";
 import { api, type Plan, type PlanFeature } from "./api";
 import { useAuth } from "./auth";
 
@@ -16,16 +16,20 @@ export function PlanProvider({ children }: { children: ReactNode }) {
   const userId = user?.id ?? null;
   const [plan, setPlan] = useState<Plan | null>(null);
 
+  // A plan request for a previous user (or an older refresh) is ignored.
+  const seq = useRef(0);
   const refresh = useCallback(async () => {
+    const mine = ++seq.current;
     if (!userId) {
       setPlan(null);
       return;
     }
     try {
-      setPlan(await api.plan());
+      const p = await api.plan();
+      if (mine === seq.current) setPlan(p);
     } catch {
       // Gated controls fall back to the server's upgrade_required errors.
-      setPlan(null);
+      if (mine === seq.current) setPlan(null);
     }
   }, [userId]);
 

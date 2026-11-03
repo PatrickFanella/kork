@@ -6,6 +6,7 @@ import { Notice, Spinner } from "../../components/ui";
 import { cssByteLength, CUSTOM_CSS_MAX_BYTES, fontFileProblem } from "../../lib/proStyle";
 import { planAllows, usePlan } from "../../plan";
 import type { EditorProps } from "./types";
+import { useUnsaved } from "../../lib/unsaved";
 
 const FONT_SLOTS: { key: keyof FontUploads; label: string; hint: string }[] = [
   { key: "body", label: "Body text", hint: "Buttons, bio and text blocks." },
@@ -160,6 +161,7 @@ export function CustomCSSSection({ page, setPage, saved }: EditorProps) {
   useEffect(() => {
     setText(page.custom_css ?? "");
   }, [page.id, page.custom_css]);
+  useUnsaved(text !== stored);
 
   const bytes = cssByteLength(text);
   const tooLarge = bytes > CUSTOM_CSS_MAX_BYTES;

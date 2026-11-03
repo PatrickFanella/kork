@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api, errorMessage, type LinkPreview } from "../../api";
 import { Icon } from "../../components/Icon";
 import { Spinner } from "../../components/ui";
@@ -24,6 +24,10 @@ export function LinkPreviewHelper({ url, title, subtitle, thumbnailId, onUse }: 
 
   const target = url.trim();
   const usable = /^(https?:\/\/)?[^\s/:]+\.[^\s]+$/i.test(target);
+  // The newest URL and thumbnail, read when a fetch finishes: the user may
+  // have changed either while it ran.
+  const current = useRef({ url: target, thumbnailId });
+  current.current = { url: target, thumbnailId };
 
   async function fetchPreview() {
     setBusy(true);
@@ -32,7 +36,9 @@ export function LinkPreviewHelper({ url, title, subtitle, thumbnailId, onUse }: 
       const p = await api.linkPreview(target);
       setPreview(p);
       setFetchedFor(target);
-      if (p.thumbnail_upload_id && !thumbnailId) onUse("thumbnail_upload_id", p.thumbnail_upload_id);
+      if (p.thumbnail_upload_id && current.current.url === target && !current.current.thumbnailId) {
+        onUse("thumbnail_upload_id", p.thumbnail_upload_id);
+      }
     } catch (err) {
       setPreview(null);
       setError(errorMessage(err));

@@ -11,6 +11,7 @@ import { ShareTab } from "./ShareTab";
 import { StatsTab } from "./StatsTab";
 import { ThemeTab } from "./ThemeTab";
 import type { EditorProps } from "./types";
+import { confirmLeave } from "../../lib/unsaved";
 
 const TABS: { key: string; label: string; icon: IconName }[] = [
   { key: "blocks", label: "Blocks", icon: "blocks" },
@@ -37,14 +38,24 @@ export function PageEditor() {
 
   useDocumentTitle(page ? page.title || page.slug : "Editor");
 
+  // When the page ID changes, drop the old page at once and ignore answers
+  // for any page but the newest request, so one page's draft can't be
+  // shown, or autosaved, as another's.
+  const loadSeq = useRef(0);
   const load = useCallback(() => {
+    const seq = ++loadSeq.current;
     setLoadError(null);
+    setPageState((p) => (p && p.id === id ? p : null));
     api
       .getPage(id)
-      .then(setPageState)
-      .catch((err: unknown) =>
-        setLoadError({ message: errorMessage(err), notFound: err instanceof ApiError && err.status === 404 }),
-      );
+      .then((p) => {
+        if (seq === loadSeq.current) setPageState(p);
+      })
+      .catch((err: unknown) => {
+        if (seq === loadSeq.current) {
+          setLoadError({ message: errorMessage(err), notFound: err instanceof ApiError && err.status === 404 });
+        }
+      });
   }, [id]);
 
   useEffect(load, [load]);
@@ -55,6 +66,7 @@ export function PageEditor() {
   const saved = useCallback(() => setVersion((v) => v + 1), []);
 
   function selectTab(key: string, focus = false) {
+    if (key !== tab && !confirmLeave()) return;
     const next = new URLSearchParams(params);
     if (key === "blocks") next.delete("tab");
     else next.set("tab", key);
@@ -124,7 +136,7 @@ export function PageEditor() {
     <div className={`editor${previewOpen ? " preview-open" : ""}`}>
       <div className="editor-main">
         <div className="editor-header">
-          <Link to="/" className="back-link">
+          <Link to="/" className="back-link" onClick={(e) => !confirmLeave() && e.preventDefault()}>
             <Icon name="back" size={16} />
             <span>Pages</span>
           </Link>
@@ -173,7 +185,7 @@ export function PageEditor() {
           ))}
         </div>
 
-        <div className="tab-panel" role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} tabIndex={0}>
+        <div key={page.id} className="tab-panel" role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} tabIndex={0}>
           {tab === "blocks" && <BlocksTab {...props} />}
           {tab === "profile" && <ProfileTab {...props} />}
           {tab === "theme" && <ThemeTab {...props} />}

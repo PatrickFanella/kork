@@ -6,6 +6,7 @@ import { ImageField, Notice, Spinner, Switch, TextField } from "../../components
 import { useSlugCheck } from "../../lib/useSlugCheck";
 import { normalizeSlug, walletProblem } from "../../lib/validate";
 import type { EditorProps } from "./types";
+import { useUnsaved } from "../../lib/unsaved";
 
 export function ProfileTab(props: EditorProps) {
   return (
@@ -103,6 +104,7 @@ function DetailsSection({ page, setPage, saved }: EditorProps) {
   const [ok, setOk] = useState(false);
   const [errors, setErrors] = useState<{ title?: string; bio?: string; general?: string; avatar?: string }>({});
   const dirty = title !== page.title || bio !== page.bio;
+  useUnsaved(dirty);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
