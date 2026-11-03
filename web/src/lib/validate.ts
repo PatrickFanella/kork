@@ -143,3 +143,11 @@ export function contrastRatio(a: string, b: string): number | null {
   const [hi, lo] = la > lb ? [la, lb] : [lb, la];
   return (hi + 0.05) / (lo + 0.05);
 }
+
+// atprotoDIDProblem mirrors the server's check of a Bluesky DID.
+export function atprotoDIDProblem(did: string): string | null {
+  if (did === "") return null;
+  if (/^did:plc:[a-z2-7]{24}$/.test(did)) return null;
+  if (/^did:web:[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/.test(did)) return null;
+  return "Enter your DID: did:plc: followed by 24 characters, or did:web: and a domain.";
+}

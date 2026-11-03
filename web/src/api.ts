@@ -241,6 +241,8 @@ export interface Page {
   domains: Domain[];
   /** Stored, sanitized custom CSS (Pro). Missing on older servers. */
   custom_css?: string;
+  /** Bluesky DID served at /.well-known/atproto-did on custom domains. Missing on older servers. */
+  atproto_did?: string;
   created_at: string;
   updated_at: string;
 }
@@ -252,6 +254,7 @@ export interface PagePatch {
   avatar_upload_id?: string | null;
   theme?: ThemePatch;
   published?: boolean;
+  atproto_did?: string;
 }
 
 export interface SlugCheck {

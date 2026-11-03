@@ -64,6 +64,27 @@ func (s *Server) handleCustomDomainPage(w http.ResponseWriter, r *http.Request) 
 	s.renderPage(w, r, p, false, "https://"+host+"/")
 }
 
+// handleAtprotoDID answers Bluesky's HTTPS handle check on a page's custom
+// domain with the page's DID as plain text. It only answers for a served
+// domain on a live page with a DID; everything else is 404.
+// https://atproto.com/specs/handle
+func (s *Server) handleAtprotoDID(w http.ResponseWriter, r *http.Request) {
+	host := strings.ToLower(hostOnly(r.Host))
+	if !s.domainServed(r.Context(), host) {
+		http.NotFound(w, r)
+		return
+	}
+	p, err := s.store.PageByDomain(r.Context(), host)
+	if err != nil || !p.Live() || p.AtprotoDID == "" {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	_, _ = w.Write([]byte(p.AtprotoDID))
+}
+
 func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var u *store.User
