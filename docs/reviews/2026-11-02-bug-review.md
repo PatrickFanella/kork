@@ -99,3 +99,17 @@ Plausible, not reproduced:
   - Feed thumbnail uploads can leave orphaned files.
   - Admin user search and the link preview can apply stale responses.
 - **Low-impact.** `displayURL` can cut a multi-byte character in half.
+
+## Tracking issues
+
+Every finding has a Gitea issue, created 2026-11-02.
+
+- Fixed on this branch: #44 (theme injection), #45 (phone and SMS links),
+  #46 (custom CSS siblings), #47 (`x/net` vulnerability), #48 (Brevo list ID),
+  #49 (verification session), #50 (title length).
+- Open, confirmed: #51 (reorder rollback), #52 (schedule bounds),
+  #53 (custom domain expiry), #54 (unsaved edits).
+- Open, plausible: #55 (forwarded IP), #56 and #57 (Stripe), #58, #59 and #60
+  (Brevo delivery), #61 and #62 (mail), #63 (export timeout), #64 (Patreon),
+  #65 (thumbnail leak), #66 (stale responses), #67 (`displayURL`).
+- Test coverage: #68.
