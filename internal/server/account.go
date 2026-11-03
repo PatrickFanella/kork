@@ -18,12 +18,14 @@ import (
 
 // accountLimits throttle password checks and exports per account.
 type accountLimits struct {
-	password *limiter
-	export   *limiter
+	password    *limiter
+	export      *limiter
+	importLimit *limiter // export ZIP previews and imports
 }
 
 func newAccountLimits() accountLimits {
-	return accountLimits{password: newLimiter(10, 15*time.Minute), export: newLimiter(5, time.Hour)}
+	return accountLimits{password: newLimiter(10, 15*time.Minute), export: newLimiter(5, time.Hour),
+		importLimit: newLimiter(10, time.Hour)}
 }
 
 func (s *Server) handleTerms(w http.ResponseWriter, r *http.Request)   { s.writeLegal(w, "terms") }
@@ -227,6 +229,8 @@ type exportUpload struct {
 }
 
 type exportAccount struct {
+	// FormatVersion lets an importer reject exports it can't read.
+	FormatVersion   int             `json:"format_version"`
 	ExportedAt      time.Time       `json:"exported_at"`
 	Email           string          `json:"email"`
 	EmailVerified   bool            `json:"email_verified"`
@@ -269,13 +273,16 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusTooManyRequests, "rate_limited", "you can download your data 5 times an hour", "")
 		return
 	}
+	// The ZIP holds every upload and can take longer than the server's
+	// 30-second write timeout on a slow connection (#63).
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(10 * time.Minute))
 	ctx := r.Context()
 	acct, err := s.store.Account(ctx, u)
 	if err != nil {
 		s.serverErr(w, r, err)
 		return
 	}
-	out := exportAccount{ExportedAt: time.Now().UTC(), Email: u.Email, EmailVerified: u.EmailVerified, CreatedAt: u.CreatedAt,
+	out := exportAccount{FormatVersion: exportFormatVersion, ExportedAt: time.Now().UTC(), Email: u.Email, EmailVerified: u.EmailVerified, CreatedAt: u.CreatedAt,
 		TermsVersion: acct.TermsVersion, TermsAcceptedAt: acct.TermsAcceptedAt, Pages: []*exportPage{}, Uploads: []*exportUpload{}}
 	pages, err := s.store.PagesByUser(ctx, u.ID)
 	if err != nil {

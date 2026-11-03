@@ -134,6 +134,8 @@ func (s *Server) mainRoutes() *http.ServeMux {
 	m.HandleFunc("POST /api/account/email", s.api(s.authed(s.handleChangeEmail)))
 	m.HandleFunc("POST /api/account/email/confirm", s.api(s.handleConfirmEmail))
 	m.HandleFunc("GET /api/account/export", s.api(s.authed(s.handleExport)))
+	m.HandleFunc("POST /api/import/export/preview", s.api(s.authed(s.handleImportExportPreview)))
+	m.HandleFunc("POST /api/import/export", s.api(s.authed(s.handleImportExport)))
 	m.HandleFunc("DELETE /api/account", s.api(s.authed(s.handleDeleteAccount)))
 
 	// Catalog, pages, blocks

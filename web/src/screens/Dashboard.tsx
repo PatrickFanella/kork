@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { ExportImport } from "./ExportImport";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiError, api, errorMessage, type PageSummary } from "../api";
 import { Icon } from "../components/Icon";
@@ -21,6 +22,7 @@ export function Dashboard() {
   const [pages, setPages] = useState<PageSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const { plan } = usePlan();
   const maxPages = plan?.pages ?? MAX_PAGES;
 
@@ -69,6 +71,11 @@ export function Dashboard() {
             {pages.length} of {maxPages} pages used
           </p>
         </div>
+        {!creating && !importing && (
+          <button type="button" className="btn btn-ghost" onClick={() => setImporting(true)} disabled={atLimit}>
+            <span>Import from export</span>
+          </button>
+        )}
         {!creating && (
           <button
             type="button"
@@ -91,6 +98,8 @@ export function Dashboard() {
           Free accounts can have {maxPages} pages. Pro allows {plan.pro.pages}.
         </UpgradeNote>
       )}
+
+      {importing && <ExportImport onImported={load} onCancel={() => setImporting(false)} />}
 
       {creating && !atLimit && (
         <CreatePageForm base={base} firstPage={pages.length === 0} onCancel={pages.length ? () => setCreating(false) : undefined} />

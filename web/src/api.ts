@@ -200,6 +200,20 @@ export interface BlockFeed {
   error: string;
 }
 
+export interface ExportPreviewPage {
+  index: number;
+  slug: string;
+  title: string;
+  blocks: number;
+  slug_available: boolean;
+}
+
+export interface ExportImportResult {
+  pages: { id: string; slug: string }[];
+  /** What wasn't recreated, and why. */
+  skipped: { page: string; what: string; reason: string }[];
+}
+
 export type DomainMode = "dns" | "cloudflare";
 
 export interface DomainRecord {
@@ -664,6 +678,19 @@ export const api = {
     const form = new FormData();
     form.append("file", file);
     return request<Upload>("POST", "/api/uploads/font", form);
+  },
+
+  // Import pages from a Kork account export ZIP
+  exportPreview: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<{ pages: ExportPreviewPage[] }>("POST", "/api/import/export/preview", form);
+  },
+  importExport: (file: File, pages: { index: number; slug: string }[]) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("pages", JSON.stringify(pages));
+    return request<ExportImportResult>("POST", "/api/import/export", form);
   },
 
   // Import and link previews (the server fetches the remote page)
