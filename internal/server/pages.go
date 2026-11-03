@@ -175,6 +175,7 @@ func (s *Server) writePage(w http.ResponseWriter, r *http.Request, status int, p
 	for _, b := range bl {
 		b.Label = blocks.Label(b.Type, b.Data)
 	}
+	s.eventFeedStatus(r.Context(), bl)
 	ds, err := s.store.Domains(r.Context(), p.ID)
 	if err != nil {
 		s.serverErr(w, r, err)

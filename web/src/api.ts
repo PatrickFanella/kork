@@ -182,9 +182,22 @@ export interface Block {
   enabled: boolean;
   position: number;
   label: string;
+  /** Calendar feed status of an events block that reads a feed. */
+  feed?: BlockFeed;
   /** RFC 3339 UTC; null means no bound. Missing on older servers. */
   starts_at?: string | null;
   ends_at?: string | null;
+}
+
+export interface BlockFeed {
+  /** Upcoming dates kept from the last good fetch. */
+  found: number;
+  /** Dates in that fetch that couldn't be used. */
+  dropped: number;
+  checked_at: string;
+  fetched_at: string | null;
+  /** Why the last fetch failed, or "". The last good dates stay up. */
+  error: string;
 }
 
 export type DomainMode = "dns" | "cloudflare";

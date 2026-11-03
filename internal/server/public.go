@@ -156,6 +156,7 @@ func (s *Server) renderPage(w http.ResponseWriter, r *http.Request, p *store.Pag
 		AbsURL:    func(path string) string { return origin + path },
 		Now:       now,
 		Latest:    s.latestItems(r.Context(), p, list),
+		EventFeed: s.eventFeeds(r.Context(), list),
 	}
 	n := nonce()
 	view := render.Page{
