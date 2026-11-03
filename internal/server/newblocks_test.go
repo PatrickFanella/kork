@@ -102,8 +102,9 @@ type contactsResp struct {
 		ID    string `json:"id"`
 		Email string `json:"email"`
 	} `json:"contacts"`
-	Pending      int `json:"pending"`
-	AwaitingPush int `json:"awaiting_push"`
+	Pending      int    `json:"pending"`
+	AwaitingPush int    `json:"awaiting_push"`
+	PushProblem  string `json:"push_problem"`
 }
 
 func (c *client) contacts(pageID, blockID string) contactsResp {
@@ -272,9 +273,10 @@ func TestEmailSignupKeptInKork(t *testing.T) {
 
 // fakeBrevo is a stand-in for the Brevo API.
 type fakeBrevo struct {
-	mu    sync.Mutex
-	added []string
-	fail  bool
+	mu     sync.Mutex
+	added  []string
+	fail   bool // answer 502, as when Brevo is down
+	reject bool // answer 400, as when Brevo refuses the address
 }
 
 func (f *fakeBrevo) server(t *testing.T) *httptest.Server {
@@ -295,6 +297,11 @@ func (f *fakeBrevo) server(t *testing.T) *httptest.Server {
 				w.WriteHeader(http.StatusBadGateway)
 				return
 			}
+			if f.reject {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(`{"code":"invalid_parameter","message":"email is not valid"}`))
+				return
+			}
 			var body struct {
 				Email   string  `json:"email"`
 				ListIDs []int64 `json:"listIds"`
@@ -312,7 +319,8 @@ func (f *fakeBrevo) server(t *testing.T) *httptest.Server {
 	return ts
 }
 
-func (f *fakeBrevo) setFail(v bool) { f.mu.Lock(); f.fail = v; f.mu.Unlock() }
+func (f *fakeBrevo) setFail(v bool)   { f.mu.Lock(); f.fail = v; f.mu.Unlock() }
+func (f *fakeBrevo) setReject(v bool) { f.mu.Lock(); f.reject = v; f.mu.Unlock() }
 func (f *fakeBrevo) list() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -401,13 +409,23 @@ func TestEmailSignupBrevo(t *testing.T) {
 		t.Fatalf("%d addresses kept after delivery", n)
 	}
 
-	// When Brevo is down, the address waits and is retried.
+	// When Brevo is down, the address waits and is retried once it's due.
+	clock := &testClock{now: time.Now()}
+	e.srv.SetClock(clock.Now)
 	fake.setFail(true)
 	e.subscribeAndConfirm(blk.ID, "later@example.org")
-	if got := alice.contacts(pageID, blk.ID); got.AwaitingPush != 1 || len(got.Contacts) != 0 {
+	if got := alice.contacts(pageID, blk.ID); got.AwaitingPush != 1 || len(got.Contacts) != 0 ||
+		got.PushProblem != "Brevo couldn't be reached. Sending will be retried." {
 		t.Fatalf("waiting: %+v", got)
 	}
 	fake.setFail(false)
+	if err := e.srv.SignupJobsOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := fake.list(); len(got) != 1 {
+		t.Fatalf("retried before it was due: %v", got)
+	}
+	clock.Set(clock.Now().Add(brevoRetryFirst + time.Minute))
 	if err := e.srv.SignupJobsOnce(context.Background()); err != nil {
 		t.Fatal(err)
 	}

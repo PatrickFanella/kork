@@ -97,24 +97,39 @@ type ConfirmedSignup struct {
 	ID      string
 	BlockID string
 	Email   string
+	// PendingPush is true when the address is waiting to be sent to Brevo.
+	PendingPush bool
 }
 
 // ConfirmSignup marks the address behind tok as confirmed. Used and expired
 // tokens return ErrNotFound.
 func (s *Store) ConfirmSignup(ctx context.Context, tok string, now time.Time) (*ConfirmedSignup, error) {
 	var c ConfirmedSignup
-	err := s.pool.QueryRow(ctx, `UPDATE signup_contacts SET confirmed_at = $2, token_hash = NULL, expires_at = NULL
-		WHERE token_hash = $1 AND confirmed_at IS NULL AND expires_at > $2 RETURNING id, block_id, email`,
-		HashToken(tok), now).Scan(&c.ID, &c.BlockID, &c.Email)
+	// A Brevo sign-up is marked as waiting in the same statement, so it is
+	// retried even if the first delivery never runs.
+	err := s.pool.QueryRow(ctx, `UPDATE signup_contacts c SET confirmed_at = $2, token_hash = NULL, expires_at = NULL,
+			pending_push = coalesce((SELECT b.data->>'destination' = 'brevo' FROM blocks b WHERE b.id = c.block_id), false)
+		WHERE token_hash = $1 AND confirmed_at IS NULL AND expires_at > $2 RETURNING id, block_id, email, pending_push`,
+		HashToken(tok), now).Scan(&c.ID, &c.BlockID, &c.Email, &c.PendingPush)
 	if err != nil {
 		return nil, notFound(err)
 	}
 	return &c, nil
 }
 
-// SetSignupPendingPush marks a confirmed contact as waiting to be sent to Brevo.
+// SetSignupPendingPush marks a confirmed contact as waiting (or no longer
+// waiting) to be sent to Brevo, and clears its retry state.
 func (s *Store) SetSignupPendingPush(ctx context.Context, id string, pending bool) error {
-	_, err := s.pool.Exec(ctx, `UPDATE signup_contacts SET pending_push = $2 WHERE id = $1`, id, pending)
+	_, err := s.pool.Exec(ctx, `UPDATE signup_contacts SET pending_push = $2, push_attempts = 0, next_push_at = NULL,
+		push_error = '', push_rejected = false WHERE id = $1`, id, pending)
+	return err
+}
+
+// RecordPushFailure stores a failed delivery attempt: the next attempt time,
+// a message safe to show the page owner, and whether Brevo itself refused.
+func (s *Store) RecordPushFailure(ctx context.Context, id string, next time.Time, msg string, rejected bool) error {
+	_, err := s.pool.Exec(ctx, `UPDATE signup_contacts SET push_attempts = push_attempts + 1, next_push_at = $2,
+		push_error = $3, push_rejected = $4 WHERE id = $1 AND pending_push`, id, next, msg, rejected)
 	return err
 }
 
@@ -139,6 +154,8 @@ type SignupCounts struct {
 	Pending int `json:"pending"`
 	// AwaitingPush are confirmed addresses Brevo has not accepted yet.
 	AwaitingPush int `json:"awaiting_push"`
+	// PushProblem is the most recent delivery error among them, if any.
+	PushProblem string `json:"push_problem"`
 }
 
 // SignupContacts lists a block's confirmed list (newest first), excluding
@@ -146,8 +163,11 @@ type SignupCounts struct {
 func (s *Store) SignupContacts(ctx context.Context, blockID string, now time.Time) ([]SignupContact, SignupCounts, error) {
 	var counts SignupCounts
 	if err := s.pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE confirmed_at IS NULL AND expires_at > $2),
-		count(*) FILTER (WHERE confirmed_at IS NOT NULL AND pending_push) FROM signup_contacts WHERE block_id = $1`,
-		blockID, now).Scan(&counts.Pending, &counts.AwaitingPush); err != nil {
+		count(*) FILTER (WHERE confirmed_at IS NOT NULL AND pending_push),
+		coalesce((SELECT push_error FROM signup_contacts WHERE block_id = $1 AND pending_push AND push_error <> ''
+			ORDER BY next_push_at DESC NULLS LAST LIMIT 1), '')
+		FROM signup_contacts WHERE block_id = $1`,
+		blockID, now).Scan(&counts.Pending, &counts.AwaitingPush, &counts.PushProblem); err != nil {
 		return nil, counts, err
 	}
 	rows, err := s.pool.Query(ctx, `SELECT id, block_id, email, confirmed_at FROM signup_contacts
@@ -188,18 +208,24 @@ func (s *Store) PageSignupContacts(ctx context.Context, pageID string) ([]Signup
 type PendingPush struct {
 	ConfirmedSignup
 	ConfirmedAt time.Time
+	Attempts    int
+	// Rejected is true when Brevo itself refused the last attempt.
+	Rejected bool
 }
 
-// PendingPushes lists confirmed contacts waiting for Brevo, oldest first.
-func (s *Store) PendingPushes(ctx context.Context, limit int) ([]PendingPush, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id, block_id, email, confirmed_at FROM signup_contacts
-		WHERE pending_push AND confirmed_at IS NOT NULL ORDER BY confirmed_at LIMIT $1`, limit)
+// PendingPushes lists confirmed contacts waiting for Brevo whose next
+// attempt is due at now: never-tried ones first, then by due time, so rows
+// that keep failing don't hold back newer ones.
+func (s *Store) PendingPushes(ctx context.Context, now time.Time, limit int) ([]PendingPush, error) {
+	rows, err := s.pool.Query(ctx, `SELECT id, block_id, email, confirmed_at, push_attempts, push_rejected FROM signup_contacts
+		WHERE pending_push AND confirmed_at IS NOT NULL AND (next_push_at IS NULL OR next_push_at <= $1)
+		ORDER BY next_push_at NULLS FIRST, confirmed_at LIMIT $2`, now, limit)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (PendingPush, error) {
 		var p PendingPush
-		err := row.Scan(&p.ID, &p.BlockID, &p.Email, &p.ConfirmedAt)
+		err := row.Scan(&p.ID, &p.BlockID, &p.Email, &p.ConfirmedAt, &p.Attempts, &p.Rejected)
 		return p, err
 	})
 }

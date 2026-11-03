@@ -330,13 +330,16 @@ The confirmation email links to `/subscribe/confirm?token=...` on the main host.
 After confirmation:
 
 - `kork`: the address joins the block's list.
-- `brevo`: the address is sent to Brevo (`POST /v3/contacts` with `listIds` and `updateEnabled: true`) and deleted from Kork. If Brevo fails, the address is kept and retried every 15 minutes for up to 7 days, then deleted.
+- `brevo`: the address is sent to Brevo (`POST /v3/contacts` with `listIds` and `updateEnabled: true`) and deleted from Kork.
+  - **Confirming queues the address.** The address is marked as waiting for Brevo in the same statement that confirms it, so it is delivered even if the confirm request ends before the first attempt.
+  - **Retries.** A failed delivery is retried after 15 minutes, with the gap doubling up to 12 hours. Addresses that have never been tried go first.
+  - **When an address is deleted.** Only when Brevo itself refuses it (a rejected key, a missing list, or another 4xx other than 429) and it was confirmed more than 7 days ago. Failures on Kork's side keep the address, such as a stored key that can't be read after `ZELDA_SECRET_KEY` changes. So do network errors and 5xx responses.
 
 The creator's list:
 
 | Method | Path | Response |
 |---|---|---|
-| GET | `/api/pages/{id}/blocks/{blockId}/contacts` | `200 {contacts: [{id, block_id, email, confirmed_at}], pending, awaiting_push}`, newest first. `pending` counts unconfirmed addresses, `awaiting_push` confirmed addresses waiting for Brevo. |
+| GET | `/api/pages/{id}/blocks/{blockId}/contacts` | `200 {contacts: [{id, block_id, email, confirmed_at}], pending, awaiting_push, push_problem}`, newest first. `pending` counts unconfirmed addresses, `awaiting_push` confirmed addresses waiting for Brevo. `push_problem` is the latest delivery error as a fixed message for the owner, or empty. |
 | GET | `/api/pages/{id}/blocks/{blockId}/contacts.csv` | `200 text/csv` with `email,confirmed_at`. Values starting with `= + - @` are prefixed with `'`. |
 | DELETE | `/api/pages/{id}/blocks/{blockId}/contacts/{contactId}` | `204` |
 

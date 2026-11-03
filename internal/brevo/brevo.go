@@ -24,6 +24,34 @@ var (
 	ErrListNotFound = errors.New("Brevo has no list with that ID")
 )
 
+// APIError is a response from Brevo with a status other than those above.
+type APIError struct {
+	Status  int
+	Code    string
+	Message string
+}
+
+func (e *APIError) Error() string {
+	if e.Message != "" {
+		return fmt.Sprintf("brevo: %d %s: %s", e.Status, e.Code, e.Message)
+	}
+	return fmt.Sprintf("brevo: unexpected status %d", e.Status)
+}
+
+// Rejected reports whether Brevo itself refused the request in a way a
+// retry won't fix: a bad key, a missing list, or another 4xx other than
+// rate limiting. Network failures and 5xx responses are not rejections.
+func Rejected(err error) bool {
+	var ae *APIError
+	switch {
+	case errors.Is(err, ErrUnauthorized), errors.Is(err, ErrListNotFound):
+		return true
+	case errors.As(err, &ae):
+		return ae.Status >= 400 && ae.Status < 500 && ae.Status != http.StatusTooManyRequests
+	}
+	return false
+}
+
 // Client calls the Brevo API. BaseURL is replaced in tests.
 type Client struct {
 	BaseURL string
@@ -86,8 +114,5 @@ func (c *Client) do(ctx context.Context, apiKey, method, path string, body any) 
 		Message string `json:"message"`
 	}
 	_ = json.Unmarshal(data, &e)
-	if e.Message != "" {
-		return nil, fmt.Errorf("brevo: %d %s: %s", res.StatusCode, e.Code, e.Message)
-	}
-	return nil, fmt.Errorf("brevo: unexpected status %d", res.StatusCode)
+	return nil, &APIError{Status: res.StatusCode, Code: e.Code, Message: e.Message}
 }

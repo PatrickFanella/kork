@@ -52,6 +52,7 @@ export function SignupContacts({ pageId, blockId, brevo }: { pageId: string; blo
             : "Confirmed addresses go to Brevo and aren't kept here."
           : "Deleting this block deletes this list. Download the CSV first."}
       </p>
+      {list.awaiting_push > 0 && list.push_problem && <Notice tone="warning">{list.push_problem}</Notice>}
       {n > 0 && (
         <ul className="signup-contact-list">
           {list.contacts.map((c) => (
