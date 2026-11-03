@@ -299,7 +299,7 @@ export function BlocksTab({ page, setPage, saved }: EditorProps) {
                       }}
                     />
                     {block.type === "email_signup" && (
-                      <SignupContacts pageId={page.id} blockId={block.id} brevo={block.data.destination === "brevo"} />
+                      <SignupContacts pageId={page.id} blockId={block.id} provider={block.data.destination === "brevo" ? "Brevo" : block.data.destination === "listmonk" ? "listmonk" : null} />
                     )}
                   </div>
                 )}

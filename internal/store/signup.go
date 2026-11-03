@@ -51,8 +51,12 @@ func (s *Store) DeleteSignupSecret(ctx context.Context, blockID string) error {
 // RequestSignup records an unconfirmed address and returns the token for the
 // confirmation link. Asking again before confirming replaces the token. An
 // address already on the list returns ErrConflict and is left unchanged; a
-// block with too many unconfirmed addresses returns ErrLimit.
-func (s *Store) RequestSignup(ctx context.Context, blockID, email string, now time.Time) (string, error) {
+// block with too many unconfirmed addresses returns ErrLimit. consent is the
+// JSON receipt of what the visitor agreed to; asking again replaces it.
+func (s *Store) RequestSignup(ctx context.Context, blockID, email string, consent []byte, now time.Time) (string, error) {
+	if len(consent) == 0 {
+		consent = []byte("{}")
+	}
 	tok, hash := NewToken()
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -69,8 +73,8 @@ func (s *Store) RequestSignup(ctx context.Context, blockID, email string, now ti
 	case err == nil && confirmed != nil:
 		return "", ErrConflict
 	case err == nil:
-		if _, err := tx.Exec(ctx, `UPDATE signup_contacts SET token_hash = $3, expires_at = $4
-			WHERE block_id = $1 AND lower(email) = lower($2)`, blockID, email, hash, now.Add(SignupPendingTTL)); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE signup_contacts SET token_hash = $3, expires_at = $4, consent = $5::jsonb
+			WHERE block_id = $1 AND lower(email) = lower($2)`, blockID, email, hash, now.Add(SignupPendingTTL), string(consent)); err != nil {
 			return "", err
 		}
 	case errors.Is(err, pgx.ErrNoRows):
@@ -82,8 +86,8 @@ func (s *Store) RequestSignup(ctx context.Context, blockID, email string, now ti
 		if pending >= MaxPendingSignups || total >= MaxSignupContacts {
 			return "", ErrLimit
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO signup_contacts (block_id, email, token_hash, expires_at) VALUES ($1, $2, $3, $4)`,
-			blockID, email, hash, now.Add(SignupPendingTTL)); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO signup_contacts (block_id, email, token_hash, expires_at, consent)
+			VALUES ($1, $2, $3, $4, $5::jsonb)`, blockID, email, hash, now.Add(SignupPendingTTL), string(consent)); err != nil {
 			return "", err
 		}
 	default:
@@ -97,20 +101,27 @@ type ConfirmedSignup struct {
 	ID      string
 	BlockID string
 	Email   string
-	// PendingPush is true when the address is waiting to be sent to Brevo.
+	// PendingPush is true when the address is waiting to be sent to an
+	// external list (Brevo or listmonk).
 	PendingPush bool
+	// ListKey is the list in the consent receipt, or "" for rows from
+	// before receipts.
+	ListKey string
 }
 
 // ConfirmSignup marks the address behind tok as confirmed. Used and expired
 // tokens return ErrNotFound.
 func (s *Store) ConfirmSignup(ctx context.Context, tok string, now time.Time) (*ConfirmedSignup, error) {
 	var c ConfirmedSignup
-	// A Brevo sign-up is marked as waiting in the same statement, so it is
-	// retried even if the first delivery never runs.
+	// An address for an external list is marked as waiting in the same
+	// statement, so it is retried even if the first delivery never runs. The
+	// receipt decides; rows from before receipts follow the block.
 	err := s.pool.QueryRow(ctx, `UPDATE signup_contacts c SET confirmed_at = $2, token_hash = NULL, expires_at = NULL,
-			pending_push = coalesce((SELECT b.data->>'destination' = 'brevo' FROM blocks b WHERE b.id = c.block_id), false)
-		WHERE token_hash = $1 AND confirmed_at IS NULL AND expires_at > $2 RETURNING id, block_id, email, pending_push`,
-		HashToken(tok), now).Scan(&c.ID, &c.BlockID, &c.Email, &c.PendingPush)
+			pending_push = CASE WHEN c.consent ? 'list' THEN c.consent->>'list' <> 'kork'
+				ELSE coalesce((SELECT b.data->>'destination' IN ('brevo', 'listmonk') FROM blocks b WHERE b.id = c.block_id), false) END
+		WHERE token_hash = $1 AND confirmed_at IS NULL AND expires_at > $2
+		RETURNING id, block_id, email, pending_push, coalesce(consent->>'list', '')`,
+		HashToken(tok), now).Scan(&c.ID, &c.BlockID, &c.Email, &c.PendingPush, &c.ListKey)
 	if err != nil {
 		return nil, notFound(err)
 	}
@@ -217,7 +228,7 @@ type PendingPush struct {
 // attempt is due at now: never-tried ones first, then by due time, so rows
 // that keep failing don't hold back newer ones.
 func (s *Store) PendingPushes(ctx context.Context, now time.Time, limit int) ([]PendingPush, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id, block_id, email, confirmed_at, push_attempts, push_rejected FROM signup_contacts
+	rows, err := s.pool.Query(ctx, `SELECT id, block_id, email, coalesce(consent->>'list', ''), confirmed_at, push_attempts, push_rejected FROM signup_contacts
 		WHERE pending_push AND confirmed_at IS NOT NULL AND (next_push_at IS NULL OR next_push_at <= $1)
 		ORDER BY next_push_at NULLS FIRST, confirmed_at LIMIT $2`, now, limit)
 	if err != nil {
@@ -225,7 +236,7 @@ func (s *Store) PendingPushes(ctx context.Context, now time.Time, limit int) ([]
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (PendingPush, error) {
 		var p PendingPush
-		err := row.Scan(&p.ID, &p.BlockID, &p.Email, &p.ConfirmedAt, &p.Attempts, &p.Rejected)
+		err := row.Scan(&p.ID, &p.BlockID, &p.Email, &p.ListKey, &p.ConfirmedAt, &p.Attempts, &p.Rejected)
 		return p, err
 	})
 }

@@ -39,6 +39,8 @@ type Item struct {
 	Track       bool
 	// Button is the submit label of a sign-up form.
 	Button string
+	// Disclosure says where a sign-up form sends confirmed addresses.
+	Disclosure string
 	// Events lists upcoming dates for an events block.
 	Events []EventView
 	// Date and Datetime show when a latest item was published.

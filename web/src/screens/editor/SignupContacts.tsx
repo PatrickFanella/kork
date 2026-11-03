@@ -3,7 +3,7 @@ import { api, errorMessage, type SignupContacts as Contacts } from "../../api";
 import { ConfirmButton, Notice, Spinner } from "../../components/ui";
 
 /** The confirmed list of an email sign-up block, shown while editing it. */
-export function SignupContacts({ pageId, blockId, brevo }: { pageId: string; blockId: string; brevo: boolean }) {
+export function SignupContacts({ pageId, blockId, provider }: { pageId: string; blockId: string; provider: "Brevo" | "listmonk" | null }) {
   const [list, setList] = useState<Contacts | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,11 +45,11 @@ export function SignupContacts({ pageId, blockId, brevo }: { pageId: string; blo
       </div>
       <p className="muted small">
         {list.pending > 0 && `${list.pending} waiting for visitors to confirm. `}
-        {list.awaiting_push > 0 && `${list.awaiting_push} confirmed but not yet accepted by Brevo; retried automatically. `}
-        {brevo
+        {list.awaiting_push > 0 && `${list.awaiting_push} confirmed but not yet accepted by ${provider ?? "your list"}; retried automatically. `}
+        {provider
           ? n > 0
-            ? "New confirmed addresses go to Brevo. The ones listed here were collected before you switched."
-            : "Confirmed addresses go to Brevo and aren't kept here."
+            ? `New confirmed addresses go to ${provider}. The ones listed here were collected before you switched.`
+            : `Confirmed addresses go to ${provider} and aren't kept here.`
           : "Deleting this block deletes this list. Download the CSV first."}
       </p>
       {list.awaiting_push > 0 && list.push_problem && <Notice tone="warning">{list.push_problem}</Notice>}

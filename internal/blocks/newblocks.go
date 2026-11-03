@@ -17,12 +17,14 @@ import (
 
 // Sign-up destinations.
 const (
-	DestKork  = "kork"
-	DestBrevo = "brevo"
+	DestKork     = "kork"
+	DestBrevo    = "brevo"
+	DestListmonk = "listmonk"
 )
 
-// Signup is an email sign-up form. The Brevo API key is never part of the
-// stored data: the server seals it separately and sets BrevoKeySet.
+// Signup is an email sign-up form. API keys and tokens are never part of
+// the stored data: the server seals them separately and sets BrevoKeySet or
+// ListmonkKeySet.
 type Signup struct {
 	Title       string  `json:"title"`
 	Description string  `json:"description,omitempty"`
@@ -30,6 +32,45 @@ type Signup struct {
 	Destination string  `json:"destination"`
 	BrevoListID FlexInt `json:"brevo_list_id,omitempty"`
 	BrevoKeySet bool    `json:"brevo_key_set,omitempty"`
+	// ListmonkURL is the creator's listmonk, an https URL normalized by the
+	// server; ListmonkUser is the API user whose token is sealed.
+	ListmonkURL    string  `json:"listmonk_url,omitempty"`
+	ListmonkListID FlexInt `json:"listmonk_list_id,omitempty"`
+	ListmonkUser   string  `json:"listmonk_user,omitempty"`
+	ListmonkKeySet bool    `json:"listmonk_key_set,omitempty"`
+}
+
+// External reports whether confirmed addresses leave Kork.
+func (s Signup) External() bool { return s.Destination == DestBrevo || s.Destination == DestListmonk }
+
+// Disclosure tells visitors where a confirmed address goes when it leaves
+// Kork; it is empty for lists kept in Kork. The same text goes on the form,
+// in the confirmation email and in the consent receipt.
+func (s Signup) Disclosure() string {
+	switch s.Destination {
+	case DestBrevo:
+		return "Once you confirm, your address is added to the page owner's mailing list at Brevo, their email provider."
+	case DestListmonk:
+		host := s.ListmonkURL
+		if u, err := url.Parse(s.ListmonkURL); err == nil && u.Host != "" {
+			host = u.Host
+		}
+		return "Once you confirm, your address is added to the page owner's mailing list at " + host + ", which they run with listmonk."
+	}
+	return ""
+}
+
+// ListKey identifies the exact list confirmed addresses go to. A consent
+// receipt stores it, so an address is only ever sent to the list the
+// visitor agreed to.
+func (s Signup) ListKey() string {
+	switch s.Destination {
+	case DestBrevo:
+		return "brevo:" + strconv.FormatInt(int64(s.BrevoListID), 10)
+	case DestListmonk:
+		return "listmonk:" + s.ListmonkURL + "#" + strconv.FormatInt(int64(s.ListmonkListID), 10)
+	}
+	return DestKork
 }
 
 // FlexInt accepts a JSON number or a string of digits.
@@ -75,7 +116,7 @@ type Latest struct {
 
 // SecretFields are write-only keys removed from block data before
 // validation; see TakeSecrets.
-var SecretFields = map[string][]string{"email_signup": {"brevo_api_key"}}
+var SecretFields = map[string][]string{"email_signup": {"brevo_api_key", "listmonk_api_token"}}
 
 // TakeSecrets removes write-only keys (such as a Brevo API key) from raw
 // block data. It returns the remaining data and the removed string values.
@@ -107,6 +148,27 @@ func TakeSecrets(typ string, raw json.RawMessage) (json.RawMessage, map[string]s
 	return rest, out, err
 }
 
+var listmonkUserRe = regexp.MustCompile(`^[A-Za-z0-9._@+-]{1,100}$`)
+
+// listmonkURL accepts an https URL without credentials, query or fragment
+// and returns it lowercased, without a trailing slash.
+func listmonkURL(raw string) (string, error) {
+	bad := fieldErr("listmonk_url", "enter the https address of your listmonk, such as https://lists.example.com")
+	v := strings.TrimSpace(raw)
+	if len(v) > 300 {
+		return "", bad
+	}
+	u, err := url.Parse(v)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" ||
+		u.Opaque != "" || strings.ContainsAny(u.Host, " \t") {
+		return "", bad
+	}
+	u.Path = strings.TrimSuffix(u.Path, "/")
+	u.RawPath = ""
+	u.Host = strings.ToLower(u.Host)
+	return u.String(), nil
+}
+
 func validateSignup(raw json.RawMessage) (any, error) {
 	var b Signup
 	if err := decode(raw, &b); err != nil {
@@ -122,19 +184,37 @@ func validateSignup(raw json.RawMessage) (any, error) {
 	if b.ButtonLabel, err = limit("button_label", oneLine(b.ButtonLabel), 30, false); err != nil {
 		return nil, err
 	}
+	if b.Destination != DestBrevo {
+		b.BrevoListID = 0
+	}
+	if b.Destination != DestListmonk {
+		b.ListmonkURL, b.ListmonkListID, b.ListmonkUser = "", 0, ""
+	}
 	switch b.Destination {
 	case "", DestKork:
 		b.Destination = DestKork
-		b.BrevoListID = 0
 	case DestBrevo:
 		if b.BrevoListID <= 0 || b.BrevoListID > 1<<40 {
 			return nil, fieldErr("brevo_list_id", "enter the ID of your Brevo list (a number)")
+		}
+	case DestListmonk:
+		u, err := listmonkURL(b.ListmonkURL)
+		if err != nil {
+			return nil, err
+		}
+		b.ListmonkURL = u
+		if b.ListmonkListID <= 0 || b.ListmonkListID > 1<<31 {
+			return nil, fieldErr("listmonk_list_id", "enter the ID of your listmonk list (a number)")
+		}
+		b.ListmonkUser = strings.TrimSpace(b.ListmonkUser)
+		if !listmonkUserRe.MatchString(b.ListmonkUser) {
+			return nil, fieldErr("listmonk_user", "enter the listmonk API user name")
 		}
 	default:
 		return nil, fieldErr("destination", "choose where sign-ups go")
 	}
 	// Set by the server from the stored key, never by the client.
-	b.BrevoKeySet = false
+	b.BrevoKeySet, b.ListmonkKeySet = false, false
 	return b, nil
 }
 
@@ -394,7 +474,7 @@ func buildNew(ctx Context, b Block) (Item, bool, bool) {
 		if label == "" {
 			label = "Subscribe"
 		}
-		return Item{Kind: "signup", Title: d.Title, Subtitle: d.Description, Button: label}, true, true
+		return Item{Kind: "signup", Title: d.Title, Subtitle: d.Description, Button: label, Disclosure: d.Disclosure()}, true, true
 	case "events":
 		var d Events
 		if json.Unmarshal(b.Data, &d) != nil {

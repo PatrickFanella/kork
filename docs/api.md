@@ -303,13 +303,20 @@ When link screening is configured, web destinations are checked on create and up
 
 ### Email sign-up
 
-`data`: `title` (≤ 80), `description` (≤ 200), `button_label` (≤ 30, default "Subscribe"), `destination` `"kork"` (default) or `"brevo"`, and for Brevo `brevo_list_id` (a number or a string of digits).
+`data`: `title` (≤ 80), `description` (≤ 200), `button_label` (≤ 30, default "Subscribe"), `destination` `"kork"` (default), `"brevo"` or `"listmonk"`. Brevo needs `brevo_list_id` (a number or a string of digits). listmonk needs `listmonk_url` (an `https` URL without credentials, query or fragment, stored lowercased without a trailing slash), `listmonk_list_id` and `listmonk_user` (the listmonk API user name).
 
 `brevo_api_key` is write-only. The server checks the key and list with Brevo (`GET /v3/contacts/lists/{id}`), seals the key with AES-256-GCM under `ZELDA_SECRET_KEY` and stores it outside the block data. Responses never contain it; they include `brevo_key_set: true` instead. On PATCH, omit the key to keep the saved one. Switching to `"kork"` deletes the key. Errors:
 
 - `422` `field: "destination"`, code `unavailable`: the server has no `ZELDA_SECRET_KEY`. `GET /api/catalog` reports `features.brevo_signup`.
 - `422` `field: "brevo_api_key"`: missing key (code `invalid`), rejected by Brevo (`brevo_key`), or Brevo unreachable (`brevo_unavailable`).
 - `422` `field: "brevo_list_id"`: missing, or no such list in that Brevo account (`brevo_list`).
+
+`listmonk_api_token` is write-only in the same way and is sealed with its own binding, so a stored Brevo key can't be read as a listmonk token. The server checks the account and list with `GET {listmonk_url}/api/lists/{id}` using `Authorization: token {listmonk_user}:{token}`. listmonk requests go through the same outbound client as link previews. Private, loopback and link-local addresses are refused, only ports 80 and 443 can be used, and redirects are not followed, so the token is never sent to another host. Responses include `listmonk_key_set: true`. Errors:
+
+- `422` `field: "destination"`, code `unavailable`: no `ZELDA_SECRET_KEY`. `GET /api/catalog` reports `features.listmonk_signup`.
+- `422` `field: "listmonk_url"`: not an `https` URL (`invalid`), a private address or another port (`listmonk_url`), a redirect (`listmonk_url`), or listmonk unreachable (`listmonk_unavailable`).
+- `422` `field: "listmonk_api_token"`: missing or malformed token (`invalid`), or listmonk rejected the user or token (`listmonk_key`).
+- `422` `field: "listmonk_list_id"`: missing, or no such list (`listmonk_list`). `422` `field: "listmonk_user"`: missing or containing characters other than letters, digits and `. _ @ + -`.
 
 Key and list checks share the link-preview limit (60 per user per hour).
 
@@ -323,23 +330,31 @@ Public submission, on the main host and on verified custom domains:
 - `website` is a honeypot the page hides from people. When it is filled in, the response is `202` and nothing is stored or sent.
 - `422 field: "email"` for an invalid address; `404` when the block isn't visible on a live page.
 - The response is the same whether the address is new, waiting for confirmation or already on the list. Already-listed addresses get no email. Each address gets at most 3 confirmation emails per block per hour; past that the response is still `202`.
-- `429 list_full` when a block has 1,000 unconfirmed or 50,000 total addresses. `503 unavailable` if a Brevo block has lost its key.
+- `429 list_full` when a block has 1,000 unconfirmed or 50,000 total addresses. `503 unavailable` if a Brevo or listmonk block has lost its key or token.
+- **Consent receipt.** Each request stores a receipt (`signup_contacts.consent`): version `1`, the list (`brevo:{id}`, `listmonk:{url}#{id}` or `kork`), the sender (page title), the page URL, the purpose (block title), the disclosure text shown, and the time. Asking again before confirming replaces it. The receipt covers only that sender and list; Kork never treats it as permission for anyone else.
 
 The confirmation email links to `/subscribe/confirm?token=...` on the main host. Opening it shows a button; the address is confirmed only by the POST, so mail scanners that fetch links don't confirm it. Links expire after 48 hours, and unconfirmed addresses are deleted then.
+
+For Brevo and listmonk blocks, the form and the confirmation email both say where confirmed addresses go. For listmonk this includes the listmonk host.
 
 After confirmation:
 
 - `kork`: the address joins the block's list.
+- **Only the agreed list.** An address is sent only to the list in its receipt. If the block was switched to another list or destination after the visitor asked, the address isn't sent. The owner sees a `push_problem`, and the address is deleted 7 days after confirming unless the block is switched back. Addresses from before receipts follow the block's current destination.
 - `brevo`: the address is sent to Brevo (`POST /v3/contacts` with `listIds` and `updateEnabled: true`) and deleted from Kork.
   - **Confirming queues the address.** The address is marked as waiting for Brevo in the same statement that confirms it, so it is delivered even if the confirm request ends before the first attempt.
   - **Retries.** A failed delivery is retried after 15 minutes, with the gap doubling up to 12 hours. Addresses that have never been tried go first.
   - **When an address is deleted.** Only when Brevo itself refuses it (a rejected key, a missing list, or another 4xx other than 429) and it was confirmed more than 7 days ago. Failures on Kork's side keep the address, such as a stored key that can't be read after `ZELDA_SECRET_KEY` changes. So do network errors and 5xx responses.
+- `listmonk`: the address is added with `POST /api/subscribers` (`status: "enabled"`, `lists: [id]`, `preconfirm_subscriptions: true`, since the visitor already confirmed with Kork), then deleted from Kork. Queueing, retries and deletion follow the Brevo rules above.
+  - **Existing subscribers.** If listmonk answers `409` because the address already exists, Kork looks it up (`GET /api/subscribers` with an email `query`) before changing anything. A blocklisted subscriber, or one who unsubscribed from this list, is left exactly as it is. A subscriber already on the list is left as it is. Otherwise the subscriber is added to the list as confirmed (`PUT /api/subscribers/lists`). Repeating a delivery, for example after a timeout, therefore never undoes an unsubscribe or blocklist.
+
+**Withdrawal.** Kork keeps no copy of an address after a Brevo or listmonk list accepts it. Unsubscribing, suppression and erasure requests are handled by the list owner in their own Brevo or listmonk, which is the record of who is subscribed. A later delivery from Kork never resubscribes an address listmonk has as unsubscribed or blocklisted. Deleting the block or the account deletes addresses still waiting to be sent.
 
 The creator's list:
 
 | Method | Path | Response |
 |---|---|---|
-| GET | `/api/pages/{id}/blocks/{blockId}/contacts` | `200 {contacts: [{id, block_id, email, confirmed_at}], pending, awaiting_push, push_problem}`, newest first. `pending` counts unconfirmed addresses, `awaiting_push` confirmed addresses waiting for Brevo. `push_problem` is the latest delivery error as a fixed message for the owner, or empty. |
+| GET | `/api/pages/{id}/blocks/{blockId}/contacts` | `200 {contacts: [{id, block_id, email, confirmed_at}], pending, awaiting_push, push_problem}`, newest first. `pending` counts unconfirmed addresses, `awaiting_push` confirmed addresses waiting for Brevo or listmonk. `push_problem` is the latest delivery error as a fixed message for the owner, or empty. |
 | GET | `/api/pages/{id}/blocks/{blockId}/contacts.csv` | `200 text/csv` with `email,confirmed_at`. Values starting with `= + - @` are prefixed with `'`. |
 | DELETE | `/api/pages/{id}/blocks/{blockId}/contacts/{contactId}` | `204` |
 

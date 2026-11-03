@@ -10,6 +10,7 @@ package fetch
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -63,7 +64,15 @@ type Options struct {
 type Client struct {
 	opts Options
 	hc   *http.Client
+	// direct shares hc's transport but never follows redirects, for
+	// requests that carry credentials (see Do).
+	direct    *http.Client
+	transport *http.Transport
 }
+
+// SetTLSConfigForTest replaces the TLS settings, so tests in other packages
+// can trust an httptest server's certificate.
+func (c *Client) SetTLSConfigForTest(cfg *tls.Config) { c.transport.TLSClientConfig = cfg }
 
 // New builds a Client.
 func New(opts Options) *Client {
@@ -112,6 +121,12 @@ func New(opts Options) *Client {
 		ResponseHeaderTimeout:  opts.Timeout,
 		MaxResponseHeaderBytes: 64 << 10,
 	}
+	c.transport = transport
+	c.direct = &http.Client{
+		Transport:     transport,
+		Timeout:       opts.Timeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 	c.hc = &http.Client{
 		Transport: transport,
 		Timeout:   opts.Timeout,
@@ -156,6 +171,34 @@ func (c *Client) CheckURL(u *url.URL) error {
 		return ErrBlocked
 	}
 	return nil
+}
+
+// Do sends req to a user-supplied API endpoint with the same URL and
+// address checks as Get, and returns the status and at most maxBytes of
+// body. Redirects are not followed, so credentials in req's headers can't
+// be forwarded to another host; a redirect comes back as its 3xx status.
+// Every status is returned without error; the caller interprets it.
+func (c *Client) Do(req *http.Request, maxBytes int64) (int, []byte, error) {
+	if err := c.CheckURL(req.URL); err != nil {
+		return 0, nil, err
+	}
+	req.Header.Set("User-Agent", c.opts.UserAgent)
+	res, err := c.direct.Do(req)
+	if err != nil {
+		if errors.Is(err, ErrBlocked) {
+			return 0, nil, ErrBlocked
+		}
+		return 0, nil, err
+	}
+	defer res.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(res.Body, maxBytes+1))
+	if err != nil {
+		return 0, nil, err
+	}
+	if int64(len(body)) > maxBytes {
+		return 0, nil, ErrTooLarge
+	}
+	return res.StatusCode, body, nil
 }
 
 // Response is a fully read, size-limited response.
