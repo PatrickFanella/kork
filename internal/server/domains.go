@@ -30,6 +30,29 @@ type domainProvider interface {
 	Describe(d *store.Domain, v *domainView)
 }
 
+// unverifiedDomainTTL is how long a domain may stay unverified. Hostnames are
+// unique, so an abandoned claim would otherwise block the real owner forever.
+const unverifiedDomainTTL = 7 * 24 * time.Hour
+
+// expireBatch bounds how many domains one expiry pass removes.
+const expireBatch = 100
+
+// ExpireDomainsOnce removes domains still unverified unverifiedDomainTTL
+// after they were added, then their provider state. A provider failure is
+// logged; the row is already gone, so the hostname is free here either way.
+func (s *Server) ExpireDomainsOnce(ctx context.Context) (int, error) {
+	ds, err := s.store.DeleteStaleDomains(ctx, s.now().Add(-unverifiedDomainTTL), expireBatch)
+	if err != nil {
+		return 0, err
+	}
+	for _, d := range ds {
+		if err := s.domains.Detach(ctx, d); err != nil {
+			s.log.Error("expired domain: remove provider state by hand", "host", d.Hostname, "err", err)
+		}
+	}
+	return len(ds), nil
+}
+
 // domainError is a provider failure the user can act on.
 type domainError struct {
 	status int

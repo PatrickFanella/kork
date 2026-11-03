@@ -213,6 +213,8 @@ export interface Domain {
   /** Readable problems reported by the check (Cloudflare mode). */
   errors?: string[];
   checked_at?: string | null;
+  /** When an unverified domain is removed; null once verified. Missing on older servers. */
+  expires_at?: string | null;
 }
 
 export interface PageSummary {
