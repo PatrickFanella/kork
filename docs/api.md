@@ -301,6 +301,15 @@ When link screening is configured, web destinations are checked on create and up
 | `events` | `{events: [{date, time?, title, city?, ticket_url?, sold_out?}]}` | 1–50 dates. See "Events" |
 | `latest` | `{source, label?}` | Newest item of a YouTube channel or RSS/Atom feed. See "Latest video or post" |
 
+### Events from a calendar feed
+
+An `events` block takes `source`: `"manual"` (the default, with `events`) or `"ics"` with `ics_url`, an `http(s)` or `webcal://` address of a public iCalendar feed. `webcal://` is stored as `https://`. For a feed, `events` is ignored and cleared.
+
+- **On save.** A new or changed address is fetched through the outbound client, which refuses private addresses and limits the response to 2 MB. Saving fails with `422` `field: "ics_url"`, code `feed_failed`, when the address can't be fetched or isn't a calendar. The address is also screened as a destination. These checks share the link-preview limit.
+- **What is read.** For each `VEVENT`: `DTSTART` gives the date, plus the time unless it is a date-only value, in the event's own `TZID` zone (UTC for `Z` times). `SUMMARY` is the title, or `LOCATION` when there is no summary. `LOCATION` is the city, and `URL` is the ticket link. Events with an `RRULE` show only their first date. Events without a date or title are skipped. Past dates are dropped, and at most 50 upcoming dates are kept. Ticket links that fail validation or link screening are removed, but the date stays.
+- **Refreshing.** The result is cached per block and refreshed in the background at most hourly, or after 10 minutes when the last fetch failed. A failed refresh keeps the last good dates.
+- **Editor status.** In the page API, such a block has `feed: {found, dropped, checked_at, fetched_at, error}`.
+
 ### Email sign-up
 
 `data`: `title` (≤ 80), `description` (≤ 200), `button_label` (≤ 30, default "Subscribe"), `destination` `"kork"` (default), `"brevo"` or `"listmonk"`. Brevo needs `brevo_list_id` (a number or a string of digits). listmonk needs `listmonk_url` (an `https` URL without credentials, query or fragment, stored lowercased without a trailing slash), `listmonk_list_id` and `listmonk_user` (the listmonk API user name).

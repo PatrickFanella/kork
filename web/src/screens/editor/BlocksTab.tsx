@@ -4,6 +4,7 @@ import { useCatalog } from "../../catalog";
 import { BLOCK_ICONS, Icon } from "../../components/Icon";
 import { ConfirmButton, Notice, Switch } from "../../components/ui";
 import { BLOCK_FALLBACK, BLOCK_ORDER, blockSummary } from "../../lib/blocks";
+import { feedStatus } from "../../lib/newblocks";
 import type { BlockSchedule } from "../../lib/schedule";
 import { MAX_BLOCKS, moveItem } from "../../lib/validate";
 import { BlockForm } from "./BlockForm";
@@ -242,6 +243,10 @@ export function BlocksTab({ page, setPage, saved }: EditorProps) {
                     <span className="block-meta">
                       <span className="block-type">{service ? service.name : typeName(block.type)}</span>
                       {summary && <span className="block-summary">{summary}</span>}
+                      {(() => {
+                        const fs = feedStatus(block.feed);
+                        return fs && <span className={fs.problem ? "block-summary block-summary-problem" : "block-summary"}>{fs.text}</span>;
+                      })()}
                     </span>
                     <ScheduleBadge block={block} />
                   </div>

@@ -71,6 +71,9 @@ type Context struct {
 	VCardURL  func(blockID string) string
 	// AbsURL turns a path on this host into an absolute URL, for QR codes.
 	AbsURL func(path string) string
+	// EventFeed returns the cached dates of an events block that reads a
+	// calendar feed.
+	EventFeed func(blockID string) []Event
 	// Now hides past events; zero means time.Now().
 	Now time.Time
 	// Latest returns the cached newest item for a latest block.

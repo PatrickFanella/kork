@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"git.subcult.tv/subculture-collective/zelda/internal/ics"
 	"strings"
 	"testing"
 	"time"
@@ -95,7 +96,7 @@ func TestValidateEvents(t *testing.T) {
 	for i := range many {
 		many[i] = Event{Date: "2026-10-20", Title: "x"}
 	}
-	raw, _ := json.Marshal(Events{many})
+	raw, _ := json.Marshal(Events{Events: many})
 	if _, err := Validate("events", raw, nil); err == nil || !strings.Contains(err.Error(), "up to 50") {
 		t.Errorf("51 events: %v", err)
 	}
@@ -120,7 +121,7 @@ func TestUpcomingEventsAndRender(t *testing.T) {
 		t.Errorf("at cutoff: %d", len(got))
 	}
 
-	data, _ := json.Marshal(Events{list})
+	data, _ := json.Marshal(Events{Events: list})
 	items := Build(Context{Now: now}, []Block{{ID: "b1", Type: "events", Data: data}})
 	if len(items) != 1 || items[0].Kind != "events" || len(items[0].Events) != 2 {
 		t.Fatalf("build: %+v", items)
@@ -217,5 +218,50 @@ func TestSignupBuild(t *testing.T) {
 	}
 	if Label("email_signup", data) != "Newsletter" {
 		t.Error("label")
+	}
+}
+
+func TestEventsICSSource(t *testing.T) {
+	out, err := Validate("events", json.RawMessage(`{"source":"ics","ics_url":"webcal://cal.example/tour.ics","events":[{"date":"2026-10-20","title":"x"}]}`), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var b Events
+	json.Unmarshal(out, &b) //nolint:errcheck
+	if b.ICSURL != "https://cal.example/tour.ics" || len(b.Events) != 0 {
+		t.Fatalf("ics block: %+v", b)
+	}
+	for _, bad := range []string{`{"source":"ics","ics_url":""}`, `{"source":"ics","ics_url":"ftp://x.example/a.ics"}`, `{"source":"other"}`} {
+		if _, err := Validate("events", json.RawMessage(bad), nil); err == nil {
+			t.Errorf("%s accepted", bad)
+		}
+	}
+	if l := Label("events", out); l != "Events from cal.example" {
+		t.Errorf("label %q", l)
+	}
+}
+
+func TestEventsFromFeed(t *testing.T) {
+	berlin, _ := time.LoadLocation("Europe/Berlin")
+	now := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
+	feed := []ics.Event{
+		{Start: time.Date(2026, 10, 9, 20, 0, 0, 0, berlin), Summary: "Late show", Location: "Berlin", URL: "https://t.example/a"},
+		{Start: time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC), AllDay: true, Location: "Leipzig"},
+		{Start: time.Date(2026, 9, 1, 20, 0, 0, 0, time.UTC), Summary: "Past"},
+		{Start: time.Date(2026, 10, 7, 19, 0, 0, 0, time.UTC), Summary: "Bad link", URL: "javascript:alert(1)"},
+		{Start: time.Date(2026, 10, 8, 19, 0, 0, 0, time.UTC)}, // no title or location
+	}
+	evs, dropped := EventsFromFeed(feed, now)
+	if dropped != 1 || len(evs) != 3 {
+		t.Fatalf("got %d events, %d dropped: %+v", len(evs), dropped, evs)
+	}
+	if evs[0].Date != "2026-10-05" || evs[0].Time != "" || evs[0].Title != "Leipzig" || evs[0].City != "" {
+		t.Errorf("all-day with only a location: %+v", evs[0])
+	}
+	if evs[1].Title != "Bad link" || evs[1].TicketURL != "" {
+		t.Errorf("unsafe ticket link kept: %+v", evs[1])
+	}
+	if evs[2].Date != "2026-10-09" || evs[2].Time != "20:00" || evs[2].City != "Berlin" || evs[2].TicketURL != "https://t.example/a" {
+		t.Errorf("event in its own zone: %+v", evs[2])
 	}
 }

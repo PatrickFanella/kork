@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { blockFields, blockSummary, cleanBlockData, missingRequired } from "./blocks";
-import { eventsProblem, upcomingEvents } from "./newblocks";
+import { eventsFields, eventsProblem, feedStatus, upcomingEvents } from "./newblocks";
 
 describe("email sign-up form", () => {
   it("shows Brevo fields only for Brevo lists, and the key is optional once saved", () => {
@@ -116,5 +116,23 @@ describe("latest", () => {
   it("summarises the source without the YouTube origin", () => {
     expect(blockSummary("latest", { source: "https://www.youtube.com/@alice" })).toBe("@alice");
     expect(blockSummary("latest", { source: "https://alice.example/feed.xml" })).toBe("https://alice.example/feed.xml");
+  });
+});
+
+describe("calendar feed events", () => {
+  it("asks for an address instead of dates when reading a feed", () => {
+    expect(eventsFields({ data: { source: "ics" } }).map((f) => f.key)).toEqual(["source", "ics_url"]);
+    expect(eventsFields({ data: {} }).map((f) => f.key)).toEqual(["source", "events"]);
+    expect(cleanBlockData("events", { source: "ics", ics_url: " webcal://c.example/a.ics ", events: [] })).toEqual({
+      source: "ics",
+      ics_url: "webcal://c.example/a.ics",
+    });
+  });
+
+  it("describes the last fetch", () => {
+    const base = { checked_at: "2026-10-02T12:00:00Z", fetched_at: "2026-10-02T12:00:00Z", dropped: 0, error: "" };
+    expect(feedStatus({ ...base, found: 5 })).toEqual({ text: "5 upcoming dates from the calendar.", problem: false });
+    expect(feedStatus({ ...base, found: 1, error: "Couldn't reach the calendar." })?.problem).toBe(true);
+    expect(feedStatus(undefined)).toBeNull();
   });
 });

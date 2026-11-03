@@ -53,6 +53,9 @@ func Destinations(typ string, raw json.RawMessage) []Destination {
 		for _, e := range b.Events {
 			add("events", e.TicketURL)
 		}
+		if b.Source == EventsICS {
+			add("ics_url", b.ICSURL)
+		}
 	case "latest":
 		var b Latest
 		_ = json.Unmarshal(raw, &b)

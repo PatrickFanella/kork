@@ -335,6 +335,9 @@ func (s *Server) prepareExtras(w http.ResponseWriter, r *http.Request, existing 
 	case "latest":
 		after, ok := s.prepareLatest(w, r, existing, data)
 		return data, after, ok
+	case "events":
+		after, ok := s.prepareEvents(w, r, existing, data)
+		return data, after, ok
 	}
 	return data, nil, true
 }
