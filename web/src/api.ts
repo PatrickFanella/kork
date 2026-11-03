@@ -67,6 +67,7 @@ export interface CatalogFeatures {
   custom_domains: boolean;
   /** Email sign-up blocks can send addresses to Brevo (needs ZELDA_SECRET_KEY). */
   brevo_signup?: boolean;
+  listmonk_signup?: boolean;
 }
 
 export interface Catalog {

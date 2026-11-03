@@ -36,6 +36,54 @@ describe("email sign-up form", () => {
   });
 });
 
+describe("listmonk sign-up form", () => {
+  const keys = (data: Record<string, unknown>, listmonk = true) =>
+    blockFields("email_signup", undefined, { listmonk, data: data as never }).map((f) => f.key);
+
+  it("shows listmonk fields only for listmonk lists, and the token is optional once saved", () => {
+    expect(keys({ destination: "kork" })).not.toContain("listmonk_api_token");
+    expect(keys({ destination: "listmonk" })).toEqual(
+      expect.arrayContaining(["listmonk_url", "listmonk_list_id", "listmonk_user", "listmonk_api_token"]),
+    );
+    const saved = blockFields("email_signup", undefined, { listmonk: true, data: { destination: "listmonk", listmonk_key_set: true } });
+    expect(
+      missingRequired(saved, {
+        title: "News",
+        destination: "listmonk",
+        listmonk_url: "https://lists.example.com",
+        listmonk_list_id: "3",
+        listmonk_user: "kork",
+        listmonk_key_set: true,
+      }),
+    ).toEqual({});
+  });
+
+  it("offers listmonk only when the server can use it", () => {
+    const dest = (listmonk: boolean) =>
+      blockFields("email_signup", undefined, { listmonk, data: { destination: "kork" } }).find((f) => f.key === "destination");
+    expect(dest(false)?.options?.map((o) => o.key)).toEqual(["kork"]);
+    expect(dest(true)?.options?.map((o) => o.key)).toEqual(["kork", "listmonk"]);
+  });
+
+  it("drops listmonk settings for other lists and never sends listmonk_key_set", () => {
+    expect(cleanBlockData("email_signup", { title: "News", destination: "kork", listmonk_url: "https://x.example", listmonk_list_id: 3 })).toEqual({
+      title: "News",
+      destination: "kork",
+    });
+    expect(
+      cleanBlockData("email_signup", {
+        title: "News",
+        destination: "listmonk",
+        listmonk_url: "https://lists.example.com",
+        listmonk_list_id: 3,
+        listmonk_user: "kork",
+        listmonk_api_token: "",
+        listmonk_key_set: true,
+      }),
+    ).toEqual({ title: "News", destination: "listmonk", listmonk_url: "https://lists.example.com", listmonk_list_id: "3", listmonk_user: "kork" });
+  });
+});
+
 describe("events", () => {
   it("cleans each date", () => {
     expect(

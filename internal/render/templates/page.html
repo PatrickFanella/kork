@@ -70,7 +70,7 @@
           <button class="btn" type="submit">{{.Button}}</button>
         </div>
         <div class="signup-hp" aria-hidden="true"><label>Leave this empty <input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
-        <p class="signup-note">We'll email you a link to confirm. <a href="{{$.BaseURL}}/privacy">Privacy</a></p>
+        <p class="signup-note">We'll email you a link to confirm.{{if .Disclosure}} {{.Disclosure}}{{end}} <a href="{{$.BaseURL}}/privacy">Privacy</a></p>
         <p class="signup-status" id="signup-{{.ID}}-status" role="status" aria-live="polite"></p>
       </form>
     </li>

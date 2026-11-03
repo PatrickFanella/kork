@@ -43,7 +43,7 @@ export function BlockForm({
     return d;
   });
   // Some fields depend on others (the Brevo settings), so derive them from the data.
-  const fields = blockFields(type, service, { brevo: catalog.features?.brevo_signup, data });
+  const fields = blockFields(type, service, { brevo: catalog.features?.brevo_signup, listmonk: catalog.features?.listmonk_signup, data });
   const [schedule, setSchedule] = useState<BlockSchedule>(() => ({
     starts_at: initialSchedule?.starts_at ?? null,
     ends_at: initialSchedule?.ends_at ?? null,

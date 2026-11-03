@@ -36,7 +36,7 @@ func brevoBlock(t *testing.T) (*env, *client, string, string, *fakeBrevo, *testC
 func TestConfirmedSignupIsQueuedBeforeDelivery(t *testing.T) {
 	e, _, _, blockID, fake, _ := brevoBlock(t)
 	ctx := context.Background()
-	tok, err := e.srv.store.RequestSignup(ctx, blockID, "fan@example.org", e.srv.now())
+	tok, err := e.srv.store.RequestSignup(ctx, blockID, "fan@example.org", nil, e.srv.now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestBrevoDeliveryDropsOnlyOnBrevoRefusal(t *testing.T) {
 		}
 	}
 	got := alice.contacts(pageID, blockID)
-	if got.AwaitingPush != 1 || got.PushProblem != "The saved Brevo API key can't be read on this server. Enter the key again to resume sending." {
+	if got.AwaitingPush != 1 || got.PushProblem != "The saved Brevo API key can't be read on this server. Enter the API key again to resume sending." {
 		t.Fatalf("local failure dropped or hidden the address: %+v", got)
 	}
 
@@ -114,7 +114,7 @@ func TestFailingPushesDontStarveNewerOnes(t *testing.T) {
 	fake.setFail(true)
 	e.subscribeAndConfirm(blockID, "old@example.org")
 	fake.setFail(false)
-	tok, err := e.srv.store.RequestSignup(ctx, blockID, "new@example.org", e.srv.now())
+	tok, err := e.srv.store.RequestSignup(ctx, blockID, "new@example.org", nil, e.srv.now())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -72,9 +72,10 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 		"button_shapes":   catalog.ButtonShapes,
 		"layouts":         catalog.Layouts,
 		"embed_providers": catalog.EmbedProviders,
-		"features":        map[string]bool{"custom_domains": s.cfg.CustomDomains, "brevo_signup": s.x.sealer != nil},
-		"domain_mode":     s.domains.Mode(),
-		"domain_target":   s.cfg.DomainTarget,
+		"features": map[string]bool{"custom_domains": s.cfg.CustomDomains, "brevo_signup": s.x.sealer != nil,
+			"listmonk_signup": s.x.sealer != nil},
+		"domain_mode":   s.domains.Mode(),
+		"domain_target": s.cfg.DomainTarget,
 	})
 }
 

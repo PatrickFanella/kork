@@ -183,8 +183,14 @@ export function cleanBlockData(
       out.events = cleanEvents(asEvents(raw));
       continue;
     }
-    if (type === "email_signup" && (key === "brevo_key_set" || (data.destination !== "brevo" && key.startsWith("brevo_")))) {
-      continue; // the server sets brevo_key_set; Brevo settings only apply to Brevo lists
+    if (
+      type === "email_signup" &&
+      (key === "brevo_key_set" ||
+        key === "listmonk_key_set" ||
+        (data.destination !== "brevo" && key.startsWith("brevo_")) ||
+        (data.destination !== "listmonk" && key.startsWith("listmonk_")))
+    ) {
+      continue; // the server sets *_key_set; provider settings only apply to that provider's lists
     }
     if (typeof raw === "boolean") {
       if (raw) out[key] = true;

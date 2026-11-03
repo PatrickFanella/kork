@@ -8,6 +8,8 @@ export const MAX_EVENTS = 50;
 export interface FieldContext {
   /** The server can send sign-ups to Brevo (catalog feature). */
   brevo?: boolean;
+  /** The server can send sign-ups to listmonk (catalog feature). */
+  listmonk?: boolean;
   /** Current form data, for fields that depend on other fields. */
   data?: BlockData;
 }
@@ -15,7 +17,9 @@ export interface FieldContext {
 export function signupFields(ctx: FieldContext = {}): FieldSpec[] {
   const data = ctx.data ?? {};
   const brevo = data.destination === "brevo";
+  const listmonk = data.destination === "listmonk";
   const keySet = data.brevo_key_set === true;
+  const tokenSet = data.listmonk_key_set === true;
   const fields: FieldSpec[] = [
     { key: "title", label: "Heading", kind: "text", required: true, maxLength: 80, placeholder: "Join my newsletter" },
     { key: "description", label: "Description", kind: "text", maxLength: 200, placeholder: "One email a month about new work." },
@@ -27,10 +31,13 @@ export function signupFields(ctx: FieldContext = {}): FieldSpec[] {
       options: [
         { key: "kork", name: "Keep the list here (download as CSV)" },
         ...(ctx.brevo || brevo ? [{ key: "brevo", name: "Add them to my Brevo list" }] : []),
+        ...(ctx.listmonk || listmonk ? [{ key: "listmonk", name: "Add them to my listmonk list" }] : []),
       ],
       hint: brevo
         ? "Visitors confirm by email first. Confirmed addresses go to Brevo and aren't kept here."
-        : "Visitors confirm by email first. Only confirmed addresses appear in your list.",
+        : listmonk
+          ? "Visitors confirm by email first and are told your listmonk's address. Confirmed addresses go there and aren't kept here."
+          : "Visitors confirm by email first. Only confirmed addresses appear in your list.",
     },
   ];
   if (brevo) {
@@ -53,6 +60,46 @@ export function signupFields(ctx: FieldContext = {}): FieldSpec[] {
         hint: keySet
           ? "A key is saved. Leave this empty to keep it, or paste a new one."
           : "Brevo → SMTP & API → API keys. It's stored encrypted and never shown again.",
+      },
+    );
+  }
+  if (listmonk) {
+    fields.push(
+      {
+        key: "listmonk_url",
+        label: "listmonk address",
+        kind: "url",
+        required: true,
+        maxLength: 300,
+        placeholder: "https://lists.example.com",
+        hint: "The https address you open listmonk at. It must be reachable from the internet.",
+      },
+      {
+        key: "listmonk_list_id",
+        label: "listmonk list ID",
+        kind: "text",
+        required: true,
+        maxLength: 10,
+        inputMode: "numeric",
+        hint: "In listmonk, open Lists. The ID is shown beside the list's name.",
+      },
+      {
+        key: "listmonk_user",
+        label: "API user",
+        kind: "text",
+        required: true,
+        maxLength: 100,
+        hint: "listmonk → Admin → Users: create an API user that can manage subscribers.",
+      },
+      {
+        key: "listmonk_api_token",
+        label: "API token",
+        kind: "password",
+        required: !tokenSet,
+        maxLength: 200,
+        hint: tokenSet
+          ? "A token is saved. Leave this empty to keep it, or paste a new one."
+          : "Shown once when you create the API user. It's stored encrypted and never shown again.",
       },
     );
   }

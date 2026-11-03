@@ -13,6 +13,8 @@ import (
 	"git.subcult.tv/subculture-collective/zelda/internal/blocks"
 	"git.subcult.tv/subculture-collective/zelda/internal/brevo"
 	"git.subcult.tv/subculture-collective/zelda/internal/config"
+	"git.subcult.tv/subculture-collective/zelda/internal/fetch"
+	"git.subcult.tv/subculture-collective/zelda/internal/listmonk"
 	"git.subcult.tv/subculture-collective/zelda/internal/mail"
 	"git.subcult.tv/subculture-collective/zelda/internal/render"
 	"git.subcult.tv/subculture-collective/zelda/internal/seal"
@@ -20,12 +22,13 @@ import (
 )
 
 // Email sign-up blocks (#11): public double opt-in, the creator's list in
-// the editor, and delivery to the creator's Brevo list.
+// the editor, and delivery to the creator's Brevo or listmonk list.
 
 // blockExtras holds state for the email sign-up and latest blocks.
 type blockExtras struct {
 	sealer         *seal.Sealer // nil when ZELDA_SECRET_KEY is unset
 	brevo          *brevo.Client
+	listmonk       *listmonk.Client // nil: use the server's fetcher
 	subscribeLimit *limiter
 
 	youtubeBase string // https://www.youtube.com; tests point it at a fixture server
@@ -53,6 +56,18 @@ func newBlockExtras(cfg *config.Config) *blockExtras {
 		x.sealer, _ = seal.New(cfg.SecretKey)
 	}
 	return x
+}
+
+// SetListmonk replaces the listmonk client (tests use a fake API server).
+func (s *Server) SetListmonk(c *listmonk.Client) { s.x.listmonk = c }
+
+// listmonkClient calls a creator's listmonk through the fetcher, which
+// refuses private addresses and doesn't follow redirects with the token.
+func (s *Server) listmonkClient() *listmonk.Client {
+	if s.x.listmonk != nil {
+		return s.x.listmonk
+	}
+	return &listmonk.Client{HTTP: s.fetcher}
 }
 
 // SetBrevo replaces the Brevo client (tests use a fake API server).
@@ -94,20 +109,33 @@ func brevoRetryAfter(attempts int) time.Duration {
 }
 
 // pushProblem turns a delivery error into a message safe to show the page
-// owner and reports whether Brevo itself refused the request.
-func pushProblem(err error) (msg string, rejected bool) {
-	switch {
-	case errors.Is(err, seal.ErrOpen), errors.Is(err, store.ErrNotFound):
-		return "The saved Brevo API key can't be read on this server. Enter the key again to resume sending.", false
-	case errors.Is(err, brevo.ErrUnauthorized):
-		return "Brevo rejected the API key. Enter a new key.", true
-	case errors.Is(err, brevo.ErrListNotFound):
-		return "Brevo has no list with this ID. Check the list ID.", true
-	case brevo.Rejected(err):
-		return "Brevo refused the address.", true
+// owner and reports whether the provider itself refused the request.
+func pushProblem(dest string, err error) (msg string, rejected bool) {
+	name, key := "Brevo", "API key"
+	if dest == blocks.DestListmonk {
+		name, key = "listmonk", "API token"
 	}
-	return "Brevo couldn't be reached. Sending will be retried.", false
+	switch {
+	case errors.Is(err, errListChanged):
+		return "Some addresses were confirmed for a list setting you've since changed, so they won't be sent. " +
+			"They're deleted 7 days after confirming unless you switch back.", true
+	case errors.Is(err, seal.ErrOpen), errors.Is(err, store.ErrNotFound):
+		return "The saved " + name + " " + key + " can't be read on this server. Enter the " + key + " again to resume sending.", false
+	case errors.Is(err, brevo.ErrUnauthorized), errors.Is(err, listmonk.ErrUnauthorized):
+		return name + " rejected the " + key + ". Enter a new one.", true
+	case errors.Is(err, brevo.ErrListNotFound), errors.Is(err, listmonk.ErrListNotFound):
+		return name + " has no list with this ID. Check the list ID.", true
+	case errors.Is(err, fetch.ErrBlocked), errors.Is(err, fetch.ErrURL):
+		return "Kork can't reach that listmonk address. It must be a public https address.", false
+	case brevo.Rejected(err), listmonk.Rejected(err):
+		return name + " refused the address.", true
+	}
+	return name + " couldn't be reached. Sending will be retried.", false
 }
+
+// errListChanged: the block now sends to a different list than the one in
+// the address's consent receipt, so the address is not sent.
+var errListChanged = errors.New("signup: list changed since the visitor agreed")
 
 func signupData(raw json.RawMessage) blocks.Signup {
 	var d blocks.Signup
@@ -117,6 +145,10 @@ func signupData(raw json.RawMessage) blocks.Signup {
 
 func blockAAD(blockID string) []byte { return []byte("signup-brevo-key:" + blockID) }
 
+// listmonkAAD binds a sealed listmonk token to its block. It differs from
+// blockAAD, so a stored Brevo key can never be opened as a listmonk token.
+func listmonkAAD(blockID string) []byte { return []byte("signup-listmonk-token:" + blockID) }
+
 // prepareSignup applies the write-only Brevo key to a validated sign-up
 // block: it checks the key and list with Brevo and sets brevo_key_set. The
 // returned function stores or removes the sealed key once the block has an
@@ -124,6 +156,9 @@ func blockAAD(blockID string) []byte { return []byte("signup-brevo-key:" + block
 func (s *Server) prepareSignup(w http.ResponseWriter, r *http.Request, existing *store.Block, data json.RawMessage,
 	secrets map[string]string) (json.RawMessage, func(context.Context, *store.Block) error, bool) {
 	d := signupData(data)
+	if d.Destination == blocks.DestListmonk {
+		return s.prepareListmonk(w, r, existing, d, secrets)
+	}
 	key, newKey := secrets["brevo_api_key"]
 	if d.Destination != blocks.DestBrevo {
 		return data, func(ctx context.Context, b *store.Block) error {
@@ -197,6 +232,127 @@ func (s *Server) prepareSignup(w http.ResponseWriter, r *http.Request, existing 
 	}, true
 }
 
+// prepareListmonk checks a listmonk destination: the API token is
+// write-only and sealed per block, and the account and list are checked
+// with the creator's listmonk whenever they change.
+func (s *Server) prepareListmonk(w http.ResponseWriter, r *http.Request, existing *store.Block, d blocks.Signup,
+	secrets map[string]string) (json.RawMessage, func(context.Context, *store.Block) error, bool) {
+	if s.x.sealer == nil {
+		writeErr(w, http.StatusUnprocessableEntity, "unavailable",
+			"sending sign-ups to listmonk isn't available on this server; keep the list in "+s.cfg.AppName+" instead", "destination")
+		return nil, nil, false
+	}
+	var prev blocks.Signup
+	if existing != nil && existing.Type == "email_signup" {
+		prev = signupData(existing.Data)
+	}
+	tok, newTok := secrets["listmonk_api_token"]
+	if newTok {
+		if len(tok) > 200 || strings.ContainsAny(tok, " \t\r\n:") {
+			writeErr(w, http.StatusUnprocessableEntity, "invalid", "that doesn't look like a listmonk API token", "listmonk_api_token")
+			return nil, nil, false
+		}
+	} else {
+		var err error
+		if existing != nil && prev.Destination == blocks.DestListmonk {
+			tok, err = s.listmonkToken(r.Context(), existing.ID)
+		} else {
+			err = store.ErrNotFound
+		}
+		if errors.Is(err, store.ErrNotFound) || errors.Is(err, seal.ErrOpen) {
+			writeErr(w, http.StatusUnprocessableEntity, "invalid", "paste your listmonk API token", "listmonk_api_token")
+			return nil, nil, false
+		} else if err != nil {
+			s.serverErr(w, r, err)
+			return nil, nil, false
+		}
+	}
+	if newTok || prev.Destination != blocks.DestListmonk || prev.ListmonkURL != d.ListmonkURL ||
+		prev.ListmonkListID != d.ListmonkListID || prev.ListmonkUser != d.ListmonkUser {
+		if !s.previewLimit.allow(userFrom(r).ID) {
+			writeErr(w, http.StatusTooManyRequests, "rate_limited", "too many checks, try again later", "")
+			return nil, nil, false
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		err := s.listmonkClient().CheckList(ctx, listmonk.Account{BaseURL: d.ListmonkURL, User: d.ListmonkUser, Token: tok},
+			int64(d.ListmonkListID))
+		cancel()
+		var ae *listmonk.APIError
+		switch {
+		case err == nil:
+		case errors.Is(err, listmonk.ErrUnauthorized):
+			writeErr(w, http.StatusUnprocessableEntity, "listmonk_key", "listmonk rejected that API user or token", "listmonk_api_token")
+			return nil, nil, false
+		case errors.Is(err, listmonk.ErrListNotFound):
+			writeErr(w, http.StatusUnprocessableEntity, "listmonk_list", "your listmonk has no list with that ID", "listmonk_list_id")
+			return nil, nil, false
+		case errors.Is(err, fetch.ErrBlocked), errors.Is(err, fetch.ErrURL):
+			writeErr(w, http.StatusUnprocessableEntity, "listmonk_url",
+				"Kork can't reach that address; it must be a public https address on the standard port", "listmonk_url")
+			return nil, nil, false
+		case errors.As(err, &ae) && ae.Status >= 300 && ae.Status < 400:
+			writeErr(w, http.StatusUnprocessableEntity, "listmonk_url",
+				"that address redirects; enter the address your listmonk is served from", "listmonk_url")
+			return nil, nil, false
+		default:
+			s.log.Warn("listmonk list check", "err", err)
+			writeErr(w, http.StatusUnprocessableEntity, "listmonk_unavailable", "couldn't reach your listmonk to check it; try again", "listmonk_url")
+			return nil, nil, false
+		}
+	}
+	d.ListmonkKeySet = true
+	out, err := json.Marshal(d)
+	if err != nil {
+		s.serverErr(w, r, err)
+		return nil, nil, false
+	}
+	return out, func(ctx context.Context, b *store.Block) error {
+		if !newTok {
+			return nil
+		}
+		return s.store.SetSignupSecret(ctx, b.ID, s.x.sealer.Seal([]byte(tok), listmonkAAD(b.ID)))
+	}, true
+}
+
+func (s *Server) listmonkToken(ctx context.Context, blockID string) (string, error) {
+	if s.x.sealer == nil {
+		return "", seal.ErrOpen
+	}
+	box, err := s.store.SignupSecret(ctx, blockID)
+	if err != nil {
+		return "", err
+	}
+	tok, err := s.x.sealer.Open(box, listmonkAAD(blockID))
+	return string(tok), err
+}
+
+// pushToListmonk adds a confirmed address to the block's listmonk list. An
+// address listmonk has as unsubscribed or blocklisted is left as it is and
+// counts as delivered, so it is deleted here.
+func (s *Server) pushToListmonk(ctx context.Context, b *store.Block, email string) error {
+	d := signupData(b.Data)
+	tok, err := s.listmonkToken(ctx, b.ID)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	out, err := s.listmonkClient().Subscribe(ctx, listmonk.Account{BaseURL: d.ListmonkURL, User: d.ListmonkUser, Token: tok},
+		int64(d.ListmonkListID), email)
+	if err == nil && out != listmonk.Added {
+		s.log.Info("listmonk kept the address as it was", "block", b.ID, "outcome", string(out))
+	}
+	return err
+}
+
+// pushSignup sends a confirmed address to the block's external list.
+func (s *Server) pushSignup(ctx context.Context, b *store.Block, email string) error {
+	if signupData(b.Data).Destination == blocks.DestListmonk {
+		return s.pushToListmonk(ctx, b, email)
+	}
+	return s.pushToBrevo(ctx, b, email)
+}
+
 func (s *Server) brevoKey(ctx context.Context, blockID string) (string, error) {
 	if s.x.sealer == nil {
 		return "", seal.ErrOpen
@@ -221,6 +377,20 @@ func (s *Server) pushToBrevo(ctx context.Context, b *store.Block, email string) 
 }
 
 const subscribeAccepted = "Check your inbox for a link to confirm your subscription."
+
+// signupConsent is the receipt stored with each sign-up request: who asked
+// the visitor (sender and page), for what (purpose), where confirmed
+// addresses go (list) and the disclosure shown. It covers only this sender
+// and list; it never implies permission for anyone else.
+type signupConsent struct {
+	Version    int       `json:"v"`
+	List       string    `json:"list"`
+	Sender     string    `json:"sender"`
+	Page       string    `json:"page"`
+	Purpose    string    `json:"purpose"`
+	Disclosure string    `json:"disclosure"`
+	At         time.Time `json:"at"`
+}
 
 // handleSubscribe starts a double opt-in for a sign-up block. The response
 // is the same whether or not the address is already on the list.
@@ -260,7 +430,8 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d := signupData(b.Data)
-	if d.Destination == blocks.DestBrevo && (!d.BrevoKeySet || s.x.sealer == nil) {
+	if (d.Destination == blocks.DestBrevo && !d.BrevoKeySet) || (d.Destination == blocks.DestListmonk && !d.ListmonkKeySet) ||
+		(d.External() && s.x.sealer == nil) {
 		writeErr(w, http.StatusServiceUnavailable, "unavailable", "this sign-up form isn't working right now", "")
 		return
 	}
@@ -270,7 +441,13 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		accepted()
 		return
 	}
-	tok, err := s.store.RequestSignup(r.Context(), id, email, s.now())
+	consent, err := json.Marshal(signupConsent{Version: 1, List: d.ListKey(), Sender: p.Title, Page: s.pageURL(p.Slug),
+		Purpose: d.Title, Disclosure: d.Disclosure(), At: s.now().UTC()})
+	if err != nil {
+		s.serverErr(w, r, err)
+		return
+	}
+	tok, err := s.store.RequestSignup(r.Context(), id, email, consent, s.now())
 	switch {
 	case errors.Is(err, store.ErrConflict):
 		accepted()
@@ -289,8 +466,8 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 func (s *Server) confirmationMail(p *store.Page, d blocks.Signup, email, tok string) mail.Message {
 	link := s.cfg.BaseURL + "/subscribe/confirm?token=" + tok
 	who := "The page owner can then see and download your address in " + s.cfg.AppName + "."
-	if d.Destination == blocks.DestBrevo {
-		who = "Your address will then be added to the page owner's mailing list at Brevo, their email provider."
+	if d.External() {
+		who = d.Disclosure()
 	}
 	return mail.Message{To: email, Subject: "Confirm your subscription: " + oneLineClip(d.Title, 80),
 		Body: "Please confirm your subscription to \"" + d.Title + "\" on " + p.Title + "'s page (" + s.pageURL(p.Slug) + "). Someone entered this address there.\n\n" +
@@ -345,7 +522,7 @@ func (s *Server) handleSubscribeConfirm(w http.ResponseWriter, r *http.Request) 
 			// The contact is already marked as waiting, so a failure here is
 			// retried by RunSignupJobs. Don't let the visitor closing the tab
 			// cancel the delivery.
-			s.deliverToBrevo(context.WithoutCancel(r.Context()), b, store.PendingPush{ConfirmedSignup: *c, ConfirmedAt: s.now()})
+			s.deliverSignup(context.WithoutCancel(r.Context()), b, store.PendingPush{ConfirmedSignup: *c, ConfirmedAt: s.now()})
 		}
 	}
 	page.Title, page.Heading = "Subscribed", "You're subscribed"
@@ -353,11 +530,18 @@ func (s *Server) handleSubscribeConfirm(w http.ResponseWriter, r *http.Request) 
 	s.writeSimple(w, http.StatusOK, page)
 }
 
-// deliverToBrevo sends a waiting address to Brevo and deletes it here. On
-// failure it schedules the next attempt. An address Brevo has refused for
-// longer than brevoPushGiveUp is dropped.
-func (s *Server) deliverToBrevo(ctx context.Context, b *store.Block, c store.PendingPush) {
-	err := s.pushToBrevo(ctx, b, c.Email)
+// deliverSignup sends a waiting address to the block's external list and
+// deletes it here. An address is only sent to the list in its consent
+// receipt. On failure the next attempt is scheduled; an address the provider
+// has refused for longer than brevoPushGiveUp is dropped.
+func (s *Server) deliverSignup(ctx context.Context, b *store.Block, c store.PendingPush) {
+	d := signupData(b.Data)
+	var err error
+	if c.ListKey != "" && c.ListKey != d.ListKey() {
+		err = errListChanged
+	} else {
+		err = s.pushSignup(ctx, b, c.Email)
+	}
 	if err == nil {
 		if err := s.store.DeleteSignupContact(ctx, c.ID); err != nil {
 			s.log.Error("delete delivered contact", "err", err)
@@ -365,24 +549,20 @@ func (s *Server) deliverToBrevo(ctx context.Context, b *store.Block, c store.Pen
 		return
 	}
 	now := s.now()
-	msg, rejected := pushProblem(err)
+	msg, rejected := pushProblem(d.Destination, err)
 	if rejected && now.Sub(c.ConfirmedAt) > brevoPushGiveUp {
-		s.log.Warn("dropping sign-up Brevo kept refusing", "block", b.ID, "err", err)
+		s.log.Warn("dropping sign-up that can't be delivered", "block", b.ID, "err", err)
 		_ = s.store.DeleteSignupContact(ctx, c.ID)
 		return
 	}
-	if rejected {
-		s.log.Warn("brevo refused a sign-up; will retry", "block", b.ID, "err", err)
-	} else {
-		s.log.Warn("brevo delivery failed; will retry", "block", b.ID, "err", err)
-	}
+	s.log.Warn("sign-up delivery failed; will retry", "block", b.ID, "destination", d.Destination, "rejected", rejected, "err", err)
 	if err := s.store.RecordPushFailure(ctx, c.ID, now.Add(brevoRetryAfter(c.Attempts)), msg, rejected); err != nil {
-		s.log.Error("record brevo retry", "err", err)
+		s.log.Error("record sign-up retry", "err", err)
 	}
 }
 
 // SignupJobsOnce deletes expired confirmation requests and retries due
-// Brevo deliveries.
+// deliveries to external lists.
 func (s *Server) SignupJobsOnce(ctx context.Context) error {
 	now := s.now()
 	if n, err := s.store.PurgeExpiredSignups(ctx, now); err != nil {
@@ -402,12 +582,13 @@ func (s *Server) SignupJobsOnce(ctx context.Context) error {
 		if err != nil {
 			continue
 		}
-		if b.Type != "email_signup" || signupData(b.Data).Destination != blocks.DestBrevo {
-			// The creator switched the block to keep the list in Kork.
+		if c.ListKey == "" && (b.Type != "email_signup" || !signupData(b.Data).External()) {
+			// From before consent receipts: the creator switched the block to
+			// keep the list in Kork.
 			_ = s.store.SetSignupPendingPush(ctx, c.ID, false)
 			continue
 		}
-		s.deliverToBrevo(ctx, b, c)
+		s.deliverSignup(ctx, b, c)
 	}
 	return nil
 }
