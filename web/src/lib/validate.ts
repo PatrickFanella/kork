@@ -151,3 +151,19 @@ export function atprotoDIDProblem(did: string): string | null {
   if (/^did:web:[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/.test(did)) return null;
   return "Enter your DID: did:plc: followed by 24 characters, or did:web: and a domain.";
 }
+
+// walletProblem mirrors the server's check of a Web Monetization wallet
+// address: an https URL or a $ payment pointer, without query or fragment.
+export function walletProblem(wallet: string): string | null {
+  if (wallet === "") return null;
+  const v = wallet.startsWith("$") ? "https://" + wallet.slice(1) : wallet;
+  try {
+    const u = new URL(v);
+    if (u.protocol === "https:" && u.hostname.includes(".") && !u.username && !u.password && !u.search && !u.hash && v.length <= 300) {
+      return null;
+    }
+  } catch {
+    // fall through
+  }
+  return "Enter a wallet address starting with https:// or a payment pointer starting with $.";
+}

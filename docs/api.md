@@ -426,6 +426,12 @@ Hostnames are unique across all accounts, so an unverified domain blocks everyon
 
 On a served custom domain (verified, and covered by the owner's plan) of a live page with a DID, `GET /.well-known/atproto-did` returns the DID as `text/plain` with no redirect. This is the HTTPS method of [AT Protocol handle resolution](https://atproto.com/specs/handle), so the domain can be set as the owner's Bluesky handle without a DNS TXT record. Every other case returns `404`, including the main host, unverified domains and unpublished or suspended pages.
 
+### Web Monetization
+
+`PATCH /api/pages/{id}` accepts `monetization_wallet`: a [Web Monetization](https://webmonetization.org/) wallet address. It can be an `https` URL or a payment pointer (`$wallet.example/alice`, stored as `https://wallet.example/alice`). Query strings, fragments, credentials and hosts without a dot are refused, and an empty string clears the value. Errors return `422` with `field: "monetization_wallet"`, with code `invalid`, or `blocked_destination` when link screening flags the address. The address is screened when it changes; the periodic re-check covers block links only.
+
+A live public page with a wallet, on the main host or a custom domain, includes one `<link rel="monetization" href="...">` in its head. Owner previews don't include it. The page makes no new requests itself; a visitor's Web Monetization provider reads the link. The public page CSP is unchanged. Whether the browser extension needs a CSP change hasn't been tested yet.
+
 ### DNS mode
 
 Used when `ZELDA_CLOUDFLARE_TOKEN` or `ZELDA_CLOUDFLARE_ZONE_ID` is unset. `txt_name` is `_zelda.<hostname>` and `txt_value` is `zelda-verify=<token>`. The user adds that TXT record, points the hostname at `target` with a CNAME (or A/AAAA for apex domains), then presses Verify. Verify checks both records and returns `422 dns_not_ready` with the reason until they match. Caddy issues the certificate on the first request after asking `/internal/tls-ask`.

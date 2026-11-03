@@ -13,6 +13,9 @@
 {{if .AvatarAbs}}<meta property="og:image" content="{{.AvatarAbs}}">{{end}}
 <meta name="twitter:card" content="summary">
 <link rel="canonical" href="{{.CanonicalURL}}">
+{{- if .MonetizationWallet}}
+<link rel="monetization" href="{{.MonetizationWallet}}">
+{{- end}}
 {{if .Preview}}<meta name="robots" content="noindex">{{end}}
 <link rel="stylesheet" href="/static/page.css?v={{.AssetVersion}}">
 <style nonce="{{.Nonce}}">:root{ {{- .CSSVars -}} }{{.ExtraCSS}}</style>

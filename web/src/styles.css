@@ -2400,3 +2400,11 @@ a.editor-url:hover {
   font-size: 0.8rem;
   overflow-wrap: anywhere;
 }
+
+/* Collapsible card sections (Profile → Advanced). */
+details.card > summary {
+  cursor: pointer;
+}
+details.card > summary > h3 {
+  display: inline;
+}

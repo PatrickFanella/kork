@@ -76,6 +76,8 @@ type Page struct {
 	// body text and headings.
 	FontBody    string
 	FontDisplay string
+	// MonetizationWallet is set only on live public pages.
+	MonetizationWallet string
 
 	// Filled by WritePage.
 	CSSVars      template.CSS
