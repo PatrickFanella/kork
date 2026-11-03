@@ -160,7 +160,13 @@ func (s *sanitizer) styleRule(r rule) string {
 		s.warn(r.line, "removed a rule: %s", p)
 		return ""
 	}
-	sel := scopeSelector(r.prelude)
+	sel, sibling := scopeSelector(r.prelude)
+	if sibling {
+		// "body ~ footer" would select elements beside the scope, such as
+		// the footer with the report link.
+		s.warn(r.line, "removed a rule: a selector can't start with ~ or + next to the page")
+		return ""
+	}
 	if sel == "" {
 		s.warn(r.line, "removed a rule with an empty selector")
 		return ""
@@ -212,8 +218,10 @@ func (s *sanitizer) preludeProblem(ns []node, selector bool) string {
 	return ""
 }
 
-// scopeSelector prefixes each selector in a list with Scope.
-func scopeSelector(prelude []node) string {
+// scopeSelector prefixes each selector in a list with Scope. sibling
+// reports a selector that would continue from the scope with a sibling
+// combinator (~ or +) and so reach elements outside it.
+func scopeSelector(prelude []node) (sel string, sibling bool) {
 	var parts []string
 	var cur []node
 	flush := func() {
@@ -222,7 +230,11 @@ func scopeSelector(prelude []node) string {
 		if len(sel) == 0 {
 			return
 		}
-		parts = append(parts, scopeOne(sel))
+		out := scopeOne(sel)
+		if tail := strings.TrimLeft(strings.TrimPrefix(out, Scope), " "); strings.HasPrefix(tail, "~") || strings.HasPrefix(tail, "+") {
+			sibling = true
+		}
+		parts = append(parts, out)
 	}
 	for _, n := range prelude {
 		if n.tok.kind == tComma {
@@ -232,7 +244,7 @@ func scopeSelector(prelude []node) string {
 		cur = append(cur, n)
 	}
 	flush()
-	return strings.Join(parts, ",")
+	return strings.Join(parts, ","), sibling
 }
 
 func scopeOne(sel []node) string {

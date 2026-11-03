@@ -178,6 +178,34 @@ func TestSanitizeEmpty(t *testing.T) {
 	}
 }
 
+// Sibling combinators after the scope select elements beside <main>, such
+// as the footer with the report link and the report dialog.
+func TestScopeRejectsSiblingsOfMain(t *testing.T) {
+	for _, in := range []string{
+		"body ~ footer { display: none }",
+		":root ~ * { display: none }",
+		"html + footer { display: none }",
+		"~ #report-dialog { display: none }",
+		"+ footer { display: none }",
+		"body.kork-page main.page ~ footer { display: none }",
+		"a, body ~ footer { color: red }",
+	} {
+		r := Sanitize(in, nil)
+		if r.CSS != "" || len(r.Warnings) == 0 {
+			t.Errorf("Sanitize(%q) = %q, %v; want the rule removed with a warning", in, r.CSS, r.Warnings)
+		}
+	}
+	// Siblings inside the scope are still allowed.
+	for in, want := range map[string]string{
+		"h2 ~ p { color: red }":      Scope + " h2 ~ p{color:red}",
+		"body > a + a { margin: 0 }": Scope + " > a + a{margin:0}",
+	} {
+		if r := Sanitize(in, nil); r.CSS != want {
+			t.Errorf("Sanitize(%q) = %q, want %q", in, r.CSS, want)
+		}
+	}
+}
+
 func TestScopeCannotReachOutsideMain(t *testing.T) {
 	for _, in := range []string{
 		"footer { display: none }",
