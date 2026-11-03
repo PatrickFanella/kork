@@ -403,8 +403,9 @@ func displayURL(link string) string {
 		return link
 	}
 	d := strings.TrimPrefix(p.Host, "www.") + strings.TrimSuffix(p.EscapedPath(), "/")
-	if len(d) > 48 {
-		d = d[:47] + "…"
+	// Cut by character, not byte: hosts can hold Unicode (#67).
+	if r := []rune(d); len(r) > 48 {
+		d = string(r[:47]) + "…"
 	}
 	return d
 }

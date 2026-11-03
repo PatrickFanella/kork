@@ -109,15 +109,34 @@ func (s *Server) sendVerification(ctx context.Context, u *store.User) {
 }
 
 // sendMail delivers in the background so slow SMTP never blocks a request
-// or reveals whether an address exists.
+// or reveals whether an address exists. WaitMail waits for these sends.
 func (s *Server) sendMail(m mail.Message) {
+	s.mailWG.Add(1)
 	go func() {
+		defer s.mailWG.Done()
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		if err := s.mail.Send(ctx, m); err != nil {
 			s.log.Error("send mail", "subject", m.Subject, "err", err)
 		}
 	}()
+}
+
+// WaitMail waits until background emails have been sent, or until ctx is
+// done. Shutdown calls it so a verification, reset or confirmation email
+// whose token was already stored isn't lost in a deploy (#62).
+func (s *Server) WaitMail(ctx context.Context) error {
+	done := make(chan struct{})
+	go func() {
+		s.mailWG.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
