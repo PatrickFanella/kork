@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
@@ -201,6 +202,13 @@ func (s *Server) CheckPatreonOnce(ctx context.Context) (checked, failed int) {
 	return checked, failed
 }
 
+// sameConnection reports whether b still holds the Patreon connection that
+// l was read from. Sealing is randomized, so a reconnect, even to the same
+// Patreon account, always stores a different token.
+func sameConnection(b *store.Billing, l store.PatreonLink) bool {
+	return b.PatreonUserID != "" && bytes.Equal(b.PatreonRefreshToken, l.RefreshToken)
+}
+
 func (s *Server) checkPatreon(ctx context.Context, l store.PatreonLink) error {
 	entitled, status, newRefresh, revoked := false, "", "", false
 	refresh, err := s.bill.sealer.Open(l.RefreshToken, []byte(l.UserID))
@@ -219,7 +227,7 @@ func (s *Server) checkPatreon(ctx context.Context, l store.PatreonLink) error {
 			if err != nil && !errors.Is(err, billing.ErrPatreonRevoked) {
 				// Keep the rotated refresh token even though the check failed.
 				_ = s.store.UpdateBilling(ctx, l.UserID, func(b *store.Billing) error {
-					if b.PatreonUserID != "" && newRefresh != "" {
+					if sameConnection(b, l) && newRefresh != "" {
 						b.PatreonRefreshToken = s.bill.sealer.Seal([]byte(newRefresh), []byte(l.UserID))
 					}
 					return nil
@@ -235,8 +243,8 @@ func (s *Server) checkPatreon(ctx context.Context, l store.PatreonLink) error {
 	}
 	now := s.now()
 	return s.store.UpdateBilling(ctx, l.UserID, func(b *store.Billing) error {
-		if b.PatreonUserID == "" {
-			return nil // disconnected meanwhile
+		if !sameConnection(b, l) {
+			return nil // disconnected or reconnected meanwhile; checked again on the next run
 		}
 		applyPatreonCheck(b, entitled, status, now)
 		switch {

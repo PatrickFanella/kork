@@ -84,20 +84,16 @@ func (s *Server) handleStripeEvent(ctx context.Context, ev *billing.Event) error
 		if sub.Customer == "" {
 			sub.Customer = cs.Customer
 		}
-		_, err = s.store.ApplyStripeEvent(ctx, ev.ID, ev.Type,
-			store.StripeTarget{UserID: userID, CustomerID: string(cs.Customer), SubscriptionID: sub.ID},
-			func(b *store.Billing) error { applySubscription(b, sub, at, true); return nil })
-		return err
+		return s.applyStripeSubscription(ctx, ev,
+			store.StripeTarget{UserID: userID, CustomerID: string(cs.Customer), SubscriptionID: sub.ID}, sub, at, true)
 
 	case "customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted":
 		var sub billing.Subscription
 		if err := json.Unmarshal(ev.Data.Object, &sub); err != nil {
 			return err
 		}
-		_, err := s.store.ApplyStripeEvent(ctx, ev.ID, ev.Type,
-			store.StripeTarget{UserID: sub.Metadata["user_id"], CustomerID: string(sub.Customer), SubscriptionID: sub.ID},
-			func(b *store.Billing) error { applySubscription(b, &sub, at, false); return nil })
-		return err
+		return s.applyStripeSubscription(ctx, ev,
+			store.StripeTarget{UserID: sub.Metadata["user_id"], CustomerID: string(sub.Customer), SubscriptionID: sub.ID}, &sub, at, false)
 
 	case "invoice.payment_failed":
 		var inv billing.Invoice
@@ -121,6 +117,92 @@ func (s *Server) handleStripeEvent(ctx context.Context, ev *billing.Event) error
 		return err
 	}
 	return nil // other event types are not used
+}
+
+// Reasons applyStripeSubscription stops before saving. Returning an error
+// from the ApplyStripeEvent callback rolls back the transaction, so the
+// event is not yet recorded as seen.
+var (
+	// errStripeTie: the event has the same timestamp as the last one applied
+	// to this subscription. Created has one-second resolution, so the order
+	// is unknown and the subscription is read from the API instead.
+	errStripeTie = errors.New("stripe: event in the same second as the last one applied")
+	// errDuplicateSubscription: a second live subscription for an account
+	// that already has one, such as two checkouts paid from two tabs.
+	errDuplicateSubscription = errors.New("stripe: second live subscription for the account")
+)
+
+// applyStripeSubscription applies a subscription event to the account. When
+// the event ties with the last one applied, it applies the subscription as
+// read from the API. When the account already has a different live
+// subscription, it cancels the new one so the customer isn't charged twice;
+// the duplicate's first payment needs a refund in the Stripe dashboard.
+func (s *Server) applyStripeSubscription(ctx context.Context, ev *billing.Event, t store.StripeTarget,
+	sub *billing.Subscription, at time.Time, fresh bool) error {
+	var tracked, userID string
+	apply := func(sub *billing.Subscription, fresh bool) error {
+		_, err := s.store.ApplyStripeEvent(ctx, ev.ID, ev.Type, t, func(b *store.Billing) error {
+			if b.StripeSubscriptionID != "" && b.StripeSubscriptionID != sub.ID &&
+				billing.Subscribed(b.StripeStatus) && billing.Subscribed(sub.Status) {
+				tracked, userID = b.StripeSubscriptionID, b.UserID
+				return errDuplicateSubscription
+			}
+			if !fresh && b.StripeSubscriptionID == sub.ID && b.StripeEventAt != nil && at.Equal(*b.StripeEventAt) {
+				return errStripeTie
+			}
+			applySubscription(b, sub, at, fresh)
+			return nil
+		})
+		return err
+	}
+	err := apply(sub, fresh)
+	if errors.Is(err, errStripeTie) {
+		cur, gerr := s.bill.stripe.GetSubscription(ctx, sub.ID)
+		if gerr != nil {
+			return gerr // 500: Stripe retries the event
+		}
+		if cur.Customer == "" {
+			cur.Customer = sub.Customer
+		}
+		sub, err = cur, apply(cur, true)
+	}
+	if !errors.Is(err, errDuplicateSubscription) {
+		return err
+	}
+	// Confirm the tracked subscription is still live; a missed event could
+	// have left a canceled one looking active here.
+	old, gerr := s.bill.stripe.GetSubscription(ctx, tracked)
+	var ae *billing.APIError
+	switch {
+	case errors.As(gerr, &ae) && ae.Status == http.StatusNotFound:
+	case gerr != nil:
+		return gerr
+	case billing.Subscribed(old.Status):
+		s.log.Error("stripe: canceling a duplicate subscription; refund its payment in the Stripe dashboard",
+			"event", ev.ID, "kept", tracked, "canceled", sub.ID, "customer", string(sub.Customer))
+		if err := s.bill.stripe.CancelSubscription(ctx, sub.ID); err != nil {
+			return err
+		}
+		// Record the event as handled without changing the account.
+		_, err := s.store.ApplyStripeEvent(ctx, ev.ID, ev.Type, t, func(*store.Billing) error { return nil })
+		return err
+	}
+	// The tracked subscription has ended: store its real state so the new
+	// one can replace it.
+	if err := s.store.UpdateBilling(ctx, userID, func(b *store.Billing) error {
+		if b.StripeSubscriptionID != tracked {
+			return nil // changed meanwhile; the retry below decides again
+		}
+		if gerr != nil { // Stripe no longer has it
+			b.StripeStatus = "canceled"
+			return nil
+		}
+		applySubscription(b, old, at, true)
+		return nil
+	}); err != nil {
+		return err
+	}
+	return apply(sub, true)
 }
 
 // applySubscription records a subscription's state and the Pro grant it

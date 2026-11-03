@@ -46,6 +46,10 @@ Checkout creates the customer, so Kork doesn't need customer write access.
 
 Use API version `2026-09-30.endive`, matching Kork's pinned API requests. Kork also reads legacy subscription period-end fields for stored events.
 
+Stripe can deliver events out of order, and an event's timestamp has one-second resolution. Kork skips an event older than the last one it applied to a subscription. When two events fall in the same second, it reads the subscription from the Stripe API instead.
+
+**Duplicate subscriptions.** Two checkouts paid from two browser tabs create two subscriptions. When a second live subscription arrives for an account that already has one, Kork first confirms with the API that the first one is still live. It then cancels the new one immediately and logs `stripe: canceling a duplicate subscription; refund its payment in the Stripe dashboard`, with both subscription IDs. Kork does not refund the duplicate's first payment; refund it in the Stripe dashboard. If the first subscription has actually ended, the new one replaces it as a resubscription.
+
 The webhook must reach the server directly. If a proxy or tunnel rewrites the request body, the signature check fails and Stripe shows `400` responses in the endpoint's event log.
 
 ### Customer portal
