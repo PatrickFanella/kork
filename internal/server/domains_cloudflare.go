@@ -220,14 +220,15 @@ func (p *cloudflareDomains) RefreshOnce(ctx context.Context) (checked, verified 
 	return checked, verified, firstErr
 }
 
-// RunDomainRefresh rechecks pending Cloudflare domains every interval until
-// ctx is done, so users don't have to press Verify. It returns at once in
-// DNS mode.
+// RunDomainRefresh runs the custom domain jobs every interval until ctx is
+// done: it removes domains left unverified past unverifiedDomainTTL and, in
+// Cloudflare mode, rechecks pending domains so users don't have to press
+// Verify. It returns at once when custom domains are off.
 func (s *Server) RunDomainRefresh(ctx context.Context, every time.Duration) {
-	p, ok := s.domains.(*cloudflareDomains)
-	if !ok || !s.cfg.CustomDomains {
+	if !s.cfg.CustomDomains {
 		return
 	}
+	p, cf := s.domains.(*cloudflareDomains)
 	t := time.NewTimer(time.Minute)
 	defer t.Stop()
 	for {
@@ -236,12 +237,19 @@ func (s *Server) RunDomainRefresh(ctx context.Context, every time.Duration) {
 			return
 		case <-t.C:
 		}
-		checked, verified, err := p.RefreshOnce(ctx)
-		if err != nil && ctx.Err() == nil {
-			s.log.Warn("custom domain refresh incomplete", "err", err)
+		if n, err := s.ExpireDomainsOnce(ctx); err != nil && ctx.Err() == nil {
+			s.log.Warn("custom domain expiry incomplete", "err", err)
+		} else if n > 0 {
+			s.log.Info("removed unverified custom domains", "count", n)
 		}
-		if checked > 0 {
-			s.log.Info("custom domain refresh", "checked", checked, "verified", verified)
+		if cf {
+			checked, verified, err := p.RefreshOnce(ctx)
+			if err != nil && ctx.Err() == nil {
+				s.log.Warn("custom domain refresh incomplete", "err", err)
+			}
+			if checked > 0 {
+				s.log.Info("custom domain refresh", "checked", checked, "verified", verified)
+			}
 		}
 		t.Reset(every)
 	}

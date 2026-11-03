@@ -530,6 +530,30 @@ func (s *Store) DeleteDomain(ctx context.Context, pageID, id string) error {
 	return err
 }
 
+// DeleteStaleDomains deletes up to limit domains that are still unverified
+// and were added before before, and returns them so provider state (a
+// Cloudflare hostname) can be removed. The check and delete are one
+// statement, so a domain verified meanwhile is kept.
+func (s *Store) DeleteStaleDomains(ctx context.Context, before time.Time, limit int) ([]*Domain, error) {
+	rows, err := s.pool.Query(ctx, `DELETE FROM domains WHERE id IN (
+			SELECT id FROM domains WHERE verified_at IS NULL AND created_at < $1
+			ORDER BY created_at LIMIT $2 FOR UPDATE SKIP LOCKED)
+		AND verified_at IS NULL RETURNING `+domainCols, before, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []*Domain{}
+	for rows.Next() {
+		d, err := scanDomain(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
 // DomainAllowed reports whether TLS may be issued for host.
 func (s *Store) DomainAllowed(ctx context.Context, host string) bool {
 	var ok bool

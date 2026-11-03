@@ -251,6 +251,12 @@ function DomainCard({
           </li>
         </ol>
       )}
+      {!domain.verified && domain.expires_at && (
+        <p className="muted">
+          Verify by {new Date(domain.expires_at).toLocaleDateString(undefined, { dateStyle: "medium" })} or the domain is
+          removed, so an unused claim can't block the domain's owner.
+        </p>
+      )}
       {!domain.verified && problems.length > 0 && (
         <Notice tone={domain.status === "error" ? "danger" : "warning"} title={domain.status === "error" ? "Can't verify" : "Not active yet"}>
           <ul className="domain-errors">

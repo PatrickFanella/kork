@@ -139,10 +139,16 @@ type domainView struct {
 	Records   []dnsRecord `json:"records"`
 	Errors    []string    `json:"errors"`
 	CheckedAt *time.Time  `json:"checked_at"`
+	// ExpiresAt is when an unverified domain is removed; nil once verified.
+	ExpiresAt *time.Time `json:"expires_at"`
 }
 
 func (s *Server) domainView(d *store.Domain) domainView {
 	v := domainView{Domain: d, Target: s.cfg.DomainTarget, Active: true, Mode: s.domains.Mode(), Errors: []string{}}
+	if !d.Verified {
+		at := d.CreatedAt.Add(unverifiedDomainTTL)
+		v.ExpiresAt = &at
+	}
 	s.domains.Describe(d, &v)
 	return v
 }

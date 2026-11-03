@@ -240,3 +240,70 @@ func TestCloudflareAdoptsDNSModeDomain(t *testing.T) {
 		t.Fatalf("delete account: %d, hostname kept: %v", code, api.Has("links.bob.example"))
 	}
 }
+
+// An unverified domain blocks its hostname for everyone, so it is removed
+// unverifiedDomainTTL after it was added, along with its Cloudflare hostname.
+func TestUnverifiedDomainsExpire(t *testing.T) {
+	e := setup(t)
+	api := cftest.New(t)
+	e.srv.UseCloudflare(api.Client())
+	// created_at comes from the database, so the clock starts at real time.
+	clock := &testClock{now: time.Now()}
+	e.srv.SetClock(clock.Now)
+	owner := func(email, slug string) (*client, string) {
+		c := e.client()
+		c.signupVerified(email)
+		c.setPlan(plans.Pro, nil)
+		return c, c.newPage(slug)
+	}
+	squatter, squatPage := owner("squatter@example.com", "squat")
+	alice, alicePage := owner("alice@example.com", "alice")
+	add := func(c *client, pageID, host string) (int, cfDomain) {
+		var d struct {
+			cfDomain
+			ExpiresAt *time.Time `json:"expires_at"`
+		}
+		code := c.do("POST", "/api/pages/"+pageID+"/domains", map[string]string{"hostname": host}, &d)
+		if code == 201 && d.ExpiresAt == nil {
+			t.Fatalf("%s: unverified domain has no expires_at", host)
+		}
+		return code, d.cfDomain
+	}
+
+	if code, _ := add(squatter, squatPage, "links.alice.example"); code != 201 {
+		t.Fatalf("squat: %d", code)
+	}
+	if code, _ := add(alice, alicePage, "links.alice.example"); code != 409 {
+		t.Fatalf("taken hostname: %d", code)
+	}
+	// A verified domain is never expired.
+	bob, bobPage := owner("bob@example.com", "bob")
+	_, kept := add(bob, bobPage, "kept.bob.example")
+	api.Set("kept.bob.example", "active", "active")
+	var v struct {
+		Verified  bool
+		ExpiresAt *time.Time `json:"expires_at"`
+	}
+	if code := bob.do("POST", "/api/pages/"+bobPage+"/domains/"+kept.ID+"/verify", nil, &v); code != 200 || !v.Verified || v.ExpiresAt != nil {
+		t.Fatalf("verify: %d %+v", code, v)
+	}
+
+	clock.Set(time.Now().Add(unverifiedDomainTTL - time.Hour))
+	if n, err := e.srv.ExpireDomainsOnce(context.Background()); err != nil || n != 0 {
+		t.Fatalf("before the deadline: %d %v", n, err)
+	}
+	clock.Set(time.Now().Add(unverifiedDomainTTL + time.Hour))
+	if n, err := e.srv.ExpireDomainsOnce(context.Background()); err != nil || n != 1 {
+		t.Fatalf("after the deadline: %d %v", n, err)
+	}
+	if api.Has("links.alice.example") {
+		t.Fatal("expired domain still registered with Cloudflare")
+	}
+	if !api.Has("kept.bob.example") {
+		t.Fatal("verified domain removed from Cloudflare")
+	}
+	var ae apiErr
+	if code := alice.do("POST", "/api/pages/"+alicePage+"/domains", map[string]string{"hostname": "links.alice.example"}, &ae); code != 201 {
+		t.Fatalf("hostname not freed: %d %+v", code, ae)
+	}
+}

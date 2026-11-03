@@ -388,7 +388,8 @@ Adding a domain needs Pro. Free accounts get `403 upgrade_required` with `featur
     {"type": "TXT", "name": "_cf-custom-hostname.links.alice.com", "value": "0e2d5a7f-...", "purpose": "ownership"}
   ],
   "errors": ["custom hostname does not CNAME to this zone."],
-  "checked_at": "2026-10-02T12:00:00Z"
+  "checked_at": "2026-10-02T12:00:00Z",
+  "expires_at": "2026-10-09T12:00:00Z"
 }
 ```
 
@@ -397,6 +398,9 @@ Adding a domain needs Pro. Free accounts get `403 upgrade_required` with `featur
 - `records` lists the DNS records to add. `purpose` is `routing` (CNAME to `target`), `ownership` (TXT) or `certificate` (certificate validation records Cloudflare asks for, Cloudflare mode only, hidden once verified).
 - `errors` holds readable problems: Cloudflare's `verification_errors` and `ssl.validation_errors`, plus our explanation of terminal states. Empty in DNS mode.
 - `checked_at` is when Cloudflare was last asked; null in DNS mode.
+- `expires_at` is when an unverified domain is removed: 7 days after it was added. It is null once the domain is verified.
+
+Hostnames are unique across all accounts, so an unverified domain blocks everyone else from adding it. In both modes, a background job runs every 10 minutes and deletes domains that are still unverified 7 days after they were added. In Cloudflare mode it also deletes their custom hostnames. A Cloudflare failure is logged, and the hostname must then be removed in the Cloudflare dashboard. The hostname can be added again straight away.
 
 ### DNS mode
 
