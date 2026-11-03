@@ -8,6 +8,7 @@ import type { EditorProps } from "./types";
 import { ProBadge, UpgradeNote } from "../../components/Pro";
 import { planAllows, usePlan } from "../../plan";
 import { CustomCSSSection, FontsSection } from "./ProThemeSections";
+import { useUnsaved } from "../../lib/unsaved";
 
 const COLOR_LABELS: Record<keyof ThemeColors, string> = {
   bg: "Background",
@@ -73,6 +74,29 @@ export function ThemeTab({ page, setPage, saved }: EditorProps) {
     }, SAVE_DELAY);
     return () => window.clearTimeout(t);
   }, [draft, page.id, setPage, saved, retry]);
+
+  // A change still waiting for the debounce is saved when the tab closes,
+  // so switching tabs right after a change doesn't lose it (#54).
+  const latestDraft = useRef(draft);
+  latestDraft.current = draft;
+  useEffect(() => {
+    return () => {
+      const d = latestDraft.current;
+      const json = JSON.stringify(d);
+      if (json === lastSaved.current || (d.background.kind === "image" && !d.background.image_upload_id)) return;
+      lastSaved.current = json;
+      api
+        .updatePage(page.id, { theme: d })
+        .then((next) => {
+          setPage((p) => ({ ...p, theme: next.theme, updated_at: next.updated_at }));
+          saved();
+        })
+        .catch(() => {
+          // The tab is gone; the change will show as unsaved when it reopens.
+        });
+    };
+  }, [page.id, setPage, saved]);
+  useUnsaved(JSON.stringify(draft) !== lastSaved.current, false);
 
   const update = (patch: Partial<Theme>) => setDraft((d) => ({ ...d, ...patch }));
   const setColor = (key: keyof ThemeColors, value: string) => setDraft((d) => ({ ...d, colors: { ...d.colors, [key]: value } }));

@@ -5,7 +5,7 @@ import { BLOCK_ICONS, Icon } from "../../components/Icon";
 import { ConfirmButton, Notice, Switch } from "../../components/ui";
 import { BLOCK_FALLBACK, BLOCK_ORDER, blockSummary } from "../../lib/blocks";
 import { feedStatus } from "../../lib/newblocks";
-import type { BlockSchedule } from "../../lib/schedule";
+import { changedSchedule, type BlockSchedule } from "../../lib/schedule";
 import { MAX_BLOCKS, moveItem } from "../../lib/validate";
 import { BlockForm } from "./BlockForm";
 import { ImportPanel } from "./ImportPanel";
@@ -37,25 +37,37 @@ export function BlocksTab({ page, setPage, saved }: EditorProps) {
 
   const blocks = page.blocks;
   const atLimit = blocks.length >= MAX_BLOCKS;
+  // The newest block list, for queued order saves that run after later edits.
+  const latest = useRef(blocks);
+  latest.current = blocks;
 
   function setBlocks(update: (b: Block[]) => Block[]) {
     setPage((p) => ({ ...p, blocks: update(p.blocks) }));
   }
 
   function commitOrder(next: Block[], moved: Block) {
-    const prev = blocks;
-    setBlocks(() => next.map((b, i) => ({ ...b, position: i })));
+    const ordered = next.map((b, i) => ({ ...b, position: i }));
+    latest.current = ordered;
+    setBlocks(() => ordered);
     const pos = next.findIndex((b) => b.id === moved.id) + 1;
     setAnnounce(`Moved ${moved.label || typeName(moved.type)} to position ${pos} of ${next.length}.`);
-    const ids = next.map((b) => b.id);
-    // Serialize order updates so rapid moves arrive in order.
+    // Serialize order updates so rapid moves arrive in order. Each save sends
+    // the order as it is when the save runs, so a block added or deleted
+    // meanwhile doesn't make it fail.
     orderQueue.current = orderQueue.current.then(async () => {
       try {
-        await api.reorderBlocks(page.id, ids);
+        await api.reorderBlocks(page.id, latest.current.map((b) => b.id));
         saved();
       } catch (err) {
         setError(`Couldn't save the new order: ${errorMessage(err)}`);
-        setBlocks(() => prev);
+        // Show what the server has rather than an older local snapshot,
+        // which could bring back deleted blocks or hide new ones.
+        try {
+          const fresh = await api.getPage(page.id);
+          setBlocks(() => fresh.blocks);
+        } catch {
+          // Keep the local order; the error above tells the user to retry.
+        }
       }
     });
   }
@@ -297,7 +309,10 @@ export function BlocksTab({ page, setPage, saved }: EditorProps) {
                       submitLabel="Save changes"
                       onCancel={() => setEditingId(null)}
                       onSubmit={async (data, schedule) => {
-                        const updated = await api.updateBlock(page.id, block.id, { data, ...schedule });
+                        const updated = await api.updateBlock(page.id, block.id, {
+                          data,
+                          ...changedSchedule({ starts_at: block.starts_at ?? null, ends_at: block.ends_at ?? null }, schedule),
+                        });
                         setBlocks((bs) => bs.map((b) => (b.id === block.id ? updated : b)));
                         setEditingId(null);
                         saved();

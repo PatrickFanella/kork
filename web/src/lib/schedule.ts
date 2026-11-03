@@ -57,3 +57,17 @@ export function scheduleBadge(s: BlockSchedule, now: number = Date.now(), locale
       return s.ends_at ? `Until ${formatWhen(s.ends_at, locale)}` : null;
   }
 }
+
+/**
+ * The bounds in `next` that differ from `saved`, compared as instants. An
+ * unchanged bound is left out so the server keeps it. Resending it would
+ * need the scheduled_links feature even when only other fields changed (#52).
+ */
+export function changedSchedule(saved: BlockSchedule, next: BlockSchedule): Partial<BlockSchedule> {
+  const same = (a: string | null, b: string | null) =>
+    a === b || (a !== null && b !== null && Date.parse(a) === Date.parse(b));
+  const out: Partial<BlockSchedule> = {};
+  if (!same(saved.starts_at, next.starts_at)) out.starts_at = next.starts_at;
+  if (!same(saved.ends_at, next.ends_at)) out.ends_at = next.ends_at;
+  return out;
+}

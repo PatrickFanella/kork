@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fromLocalInput, scheduleBadge, scheduleError, scheduleState, toLocalInput } from "./schedule";
+import { changedSchedule, fromLocalInput, scheduleBadge, scheduleError, scheduleState, toLocalInput } from "./schedule";
 
 describe("local input conversion", () => {
   it("sends local wall time as UTC without milliseconds", () => {
@@ -43,5 +43,16 @@ describe("schedule rules", () => {
     expect(scheduleBadge({ starts_at: start, ends_at: null }, t(start))).toBeNull();
     expect(scheduleBadge({ starts_at: null, ends_at: end }, t(start))).toMatch(/^Until /);
     expect(scheduleBadge({ starts_at: null, ends_at: end }, t(end))).toMatch(/^Expired /);
+  });
+});
+
+describe("changedSchedule", () => {
+  it("leaves out bounds that didn't change, comparing instants", () => {
+    const saved = { starts_at: "2026-10-02T18:00:00Z", ends_at: null };
+    expect(changedSchedule(saved, { starts_at: "2026-10-02T18:00:00.000Z", ends_at: null })).toEqual({});
+    expect(changedSchedule(saved, { starts_at: null, ends_at: null })).toEqual({ starts_at: null });
+    expect(changedSchedule(saved, { starts_at: "2026-10-02T18:00:00Z", ends_at: "2026-10-03T00:00:00Z" })).toEqual({
+      ends_at: "2026-10-03T00:00:00Z",
+    });
   });
 });

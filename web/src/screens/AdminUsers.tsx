@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent, useRef } from "react";
 import { api, errorMessage, type AdminUser } from "../api";
 import { useUser } from "../auth";
 import { Icon } from "../components/Icon";
@@ -18,12 +18,19 @@ export function AdminUsers() {
   // Per-user expiry date input (YYYY-MM-DD); empty means no expiry.
   const [expiry, setExpiry] = useState<Record<string, string>>({});
 
+  // Only the newest search's answer is shown; a slow earlier one is dropped.
+  const loadSeq = useRef(0);
   const load = useCallback((q: string) => {
+    const seq = ++loadSeq.current;
     setError(null);
     api
       .adminUsers(q)
-      .then(setUsers)
-      .catch((err: unknown) => setError(errorMessage(err)));
+      .then((list) => {
+        if (seq === loadSeq.current) setUsers(list);
+      })
+      .catch((err: unknown) => {
+        if (seq === loadSeq.current) setError(errorMessage(err));
+      });
   }, []);
   useEffect(() => load(submitted), [load, submitted]);
 
