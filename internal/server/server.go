@@ -228,6 +228,7 @@ func (s *Server) customDomainRoutes() *http.ServeMux {
 	m.HandleFunc("POST /api/report", s.api(s.handleReport))
 	m.HandleFunc("POST /api/subscribe/{id}", s.api(s.handleSubscribe))
 	m.HandleFunc("GET /{$}", s.handleCustomDomainPage)
+	m.HandleFunc("GET /.well-known/atproto-did", s.handleAtprotoDID)
 	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { s.notFoundPage(w) })
 	return m
 }

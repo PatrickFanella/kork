@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  atprotoDIDProblem,
   contrastRatio,
   fillDays,
   hostnameProblem,
@@ -94,5 +95,18 @@ describe("contrastRatio", () => {
     expect(contrastRatio("#777777", "#ffffff")).toBeCloseTo(4.48, 1);
     expect(contrastRatio("#fff", "#fff")).toBeCloseTo(1, 5);
     expect(contrastRatio("nope", "#fff")).toBeNull();
+  });
+});
+
+describe("atprotoDIDProblem", () => {
+  it("accepts did:plc and did:web and an empty value", () => {
+    for (const ok of ["", "did:plc:abcdefghijklmnopqrstuvwx", "did:web:alice.example", "did:web:a-b.example.co.uk"]) {
+      expect(atprotoDIDProblem(ok)).toBeNull();
+    }
+  });
+  it("rejects anything else", () => {
+    for (const bad of ["did:plc:short", "did:plc:ABCDEFGHIJKLMNOPQRSTUVWX", "did:key:z6Mk", "did:web:localhost", "@alice.bsky.social"]) {
+      expect(atprotoDIDProblem(bad)).not.toBeNull();
+    }
   });
 });

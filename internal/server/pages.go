@@ -278,6 +278,10 @@ func (s *Server) handleGetPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// atprotoDIDRe accepts the two DID methods Bluesky uses for accounts:
+// did:plc (24 base32 characters) and did:web (a lowercase domain).
+var atprotoDIDRe = regexp.MustCompile(`^(did:plc:[a-z2-7]{24}|did:web:[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+)$`)
+
 func (s *Server) handleUpdatePage(w http.ResponseWriter, r *http.Request) {
 	p := s.ownedPage(w, r)
 	if p == nil {
@@ -290,11 +294,21 @@ func (s *Server) handleUpdatePage(w http.ResponseWriter, r *http.Request) {
 		AvatarUploadID json.RawMessage  `json:"avatar_upload_id"`
 		Theme          *json.RawMessage `json:"theme"`
 		Published      *bool            `json:"published"`
+		AtprotoDID     *string          `json:"atproto_did"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
 	}
 	u := userFrom(r)
+	if body.AtprotoDID != nil {
+		did := strings.TrimSpace(*body.AtprotoDID)
+		if did != "" && !atprotoDIDRe.MatchString(did) {
+			writeErr(w, http.StatusUnprocessableEntity, "invalid",
+				"enter your Bluesky DID: did:plc: followed by 24 characters, or did:web: and a domain", "atproto_did")
+			return
+		}
+		p.AtprotoDID = did
+	}
 	if body.Slug != nil {
 		slug := strings.ToLower(strings.TrimSpace(*body.Slug))
 		if slug != p.Slug {

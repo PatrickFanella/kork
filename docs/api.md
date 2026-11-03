@@ -420,6 +420,12 @@ Adding a domain needs Pro. Free accounts get `403 upgrade_required` with `featur
 
 Hostnames are unique across all accounts, so an unverified domain blocks everyone else from adding it. In both modes, a background job runs every 10 minutes and deletes domains that are still unverified 7 days after they were added. In Cloudflare mode it also deletes their custom hostnames. A Cloudflare failure is logged, and the hostname must then be removed in the Cloudflare dashboard. The hostname can be added again straight away.
 
+### Bluesky handle
+
+`PATCH /api/pages/{id}` accepts `atproto_did`: a Bluesky DID, either `did:plc:` followed by 24 base32 characters (`a-z`, `2-7`) or `did:web:` and a lowercase domain. An empty string clears it. Anything else returns `422` with `field: "atproto_did"`. Pages include `atproto_did` in the page API and the account export.
+
+On a served custom domain (verified, and covered by the owner's plan) of a live page with a DID, `GET /.well-known/atproto-did` returns the DID as `text/plain` with no redirect. This is the HTTPS method of [AT Protocol handle resolution](https://atproto.com/specs/handle), so the domain can be set as the owner's Bluesky handle without a DNS TXT record. Every other case returns `404`, including the main host, unverified domains and unpublished or suspended pages.
+
 ### DNS mode
 
 Used when `ZELDA_CLOUDFLARE_TOKEN` or `ZELDA_CLOUDFLARE_ZONE_ID` is unset. `txt_name` is `_zelda.<hostname>` and `txt_value` is `zelda-verify=<token>`. The user adds that TXT record, points the hostname at `target` with a CNAME (or A/AAAA for apex domains), then presses Verify. Verify checks both records and returns `422 dns_not_ready` with the reason until they match. Caddy issues the certificate on the first request after asking `/internal/tls-ask`.

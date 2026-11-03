@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { ApiError, api, errorMessage, type Domain, type DomainMode, type DomainRecord } from "../../api";
 import { Icon } from "../../components/Icon";
 import { ConfirmButton, CopyRow, Notice, Spinner, TextField } from "../../components/ui";
-import { hostnameProblem, normalizeHostname } from "../../lib/validate";
+import { atprotoDIDProblem, hostnameProblem, normalizeHostname } from "../../lib/validate";
 import type { EditorProps } from "./types";
 import { ProBadge, UpgradeNote } from "../../components/Pro";
 import { planAllows, usePlan } from "../../plan";
@@ -83,6 +83,8 @@ export function DomainsTab({ page, setPage, saved }: EditorProps) {
         </form>
       </section>
 
+      {domains.some((d) => d.verified) && <BlueskyHandle page={page} setPage={setPage} saved={saved} />}
+
       {domains.map((d) => (
         <DomainCard
           key={d.id}
@@ -97,6 +99,60 @@ export function DomainsTab({ page, setPage, saved }: EditorProps) {
         />
       ))}
     </div>
+  );
+}
+
+function BlueskyHandle({ page, setPage, saved }: EditorProps) {
+  const [did, setDid] = useState(page.atproto_did ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const value = did.trim();
+  const problem = atprotoDIDProblem(value);
+  const changed = value !== (page.atproto_did ?? "");
+
+  async function onSave(e: FormEvent) {
+    e.preventDefault();
+    if (problem) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const p = await api.updatePage(page.id, { atproto_did: value });
+      setPage((prev) => ({ ...prev, atproto_did: p.atproto_did ?? value }));
+      saved();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card section" aria-labelledby="bluesky-handle-title">
+      <h3 id="bluesky-handle-title">Use your domain as a Bluesky handle</h3>
+      <p className="muted small">
+        Paste your account's DID and your verified domains answer Bluesky's handle check, with no DNS record to add.
+        Bluesky shows your DID when you change your handle to your own domain and choose the option without a DNS panel.
+      </p>
+      <form className="stack" onSubmit={onSave} noValidate>
+        <TextField
+          label="Bluesky DID"
+          name="atproto_did"
+          value={did}
+          onChange={setDid}
+          placeholder="did:plc:…"
+          maxLength={300}
+          spellCheck={false}
+          error={problem}
+        />
+        <div>
+          <button type="submit" className="btn" disabled={busy || !changed || problem !== null}>
+            {busy ? <Spinner label="Saving" /> : null}
+            <span>{value === "" && changed ? "Remove DID" : "Save DID"}</span>
+          </button>
+        </div>
+      </form>
+      {error && <Notice tone="danger">{error}</Notice>}
+    </section>
   );
 }
 

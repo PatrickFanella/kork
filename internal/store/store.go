@@ -215,17 +215,19 @@ type Page struct {
 	Published      bool            `json:"published"`
 	Suspended      bool            `json:"suspended"`
 	OwnerSuspended bool            `json:"-"`
-	CreatedAt      time.Time       `json:"created_at"`
-	UpdatedAt      time.Time       `json:"updated_at"`
+	// AtprotoDID is served on the page's custom domains for Bluesky handles.
+	AtprotoDID string    `json:"atproto_did"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 const pageCols = `p.id, p.user_id, p.slug, p.title, p.bio, p.avatar_upload_id, p.theme, p.published,
-	p.suspended_at IS NOT NULL, u.suspended_at IS NOT NULL, p.created_at, p.updated_at`
+	p.suspended_at IS NOT NULL, u.suspended_at IS NOT NULL, p.atproto_did, p.created_at, p.updated_at`
 
 func scanPage(row pgx.Row) (*Page, error) {
 	var p Page
 	err := row.Scan(&p.ID, &p.UserID, &p.Slug, &p.Title, &p.Bio, &p.AvatarUploadID, &p.Theme, &p.Published,
-		&p.Suspended, &p.OwnerSuspended, &p.CreatedAt, &p.UpdatedAt)
+		&p.Suspended, &p.OwnerSuspended, &p.AtprotoDID, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		return nil, notFound(err)
 	}
@@ -281,8 +283,8 @@ func (s *Store) SlugTaken(ctx context.Context, slug string) (bool, error) {
 // UpdatePage writes all mutable page fields.
 func (s *Store) UpdatePage(ctx context.Context, p *Page) error {
 	_, err := s.pool.Exec(ctx, `UPDATE pages SET slug = $2, title = $3, bio = $4, avatar_upload_id = $5,
-		theme = $6, published = $7, updated_at = now() WHERE id = $1`,
-		p.ID, p.Slug, p.Title, p.Bio, p.AvatarUploadID, p.Theme, p.Published)
+		theme = $6, published = $7, atproto_did = $8, updated_at = now() WHERE id = $1`,
+		p.ID, p.Slug, p.Title, p.Bio, p.AvatarUploadID, p.Theme, p.Published, p.AtprotoDID)
 	if isUnique(err) {
 		return ErrConflict
 	}
