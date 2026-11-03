@@ -48,11 +48,20 @@ export function ShareTab({ page }: EditorProps) {
               <img src={qr} alt={`QR code linking to ${page.url}`} width={180} height={180} onError={() => setQrFailed(true)} />
             )}
           </div>
-          <a className="btn" href={qr} download={`${page.slug}-qr.svg`}>
-            <Icon name="down" />
-            <span>Download SVG</span>
-          </a>
+          <div className="row">
+            <a className="btn" href={qr} download={`${page.slug}-qr.svg`}>
+              <Icon name="down" />
+              <span>Download SVG</span>
+            </a>
+            <a className="btn btn-ghost" href={`${qr}&colors=theme`} download={`${page.slug}-qr-theme.svg`}>
+              <Icon name="down" />
+              <span>In theme colors</span>
+            </a>
+          </div>
         </div>
+        <p className="muted small">
+          Theme colors are used only when they're dark enough on light to scan reliably. Otherwise the code is black on white.
+        </p>
       </section>
     </div>
   );

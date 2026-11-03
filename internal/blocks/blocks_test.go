@@ -3,6 +3,7 @@ package blocks
 import (
 	"encoding/json"
 	"errors"
+	"git.subcult.tv/subculture-collective/zelda/internal/qr"
 	"strings"
 	"testing"
 )
@@ -109,5 +110,25 @@ func TestVCardEscapes(t *testing.T) {
 	v := VCard(Contact{Name: "A;B", Note: "line\nbreak, comma"})
 	if !strings.Contains(v, `FN:A\;B`) || !strings.Contains(v, `NOTE:line\nbreak\, comma`) {
 		t.Fatal(v)
+	}
+}
+
+// A contact block can show a QR code of its card's absolute address.
+func TestContactQR(t *testing.T) {
+	ctx := Context{Host: "h", UploadURL: func(id string) string { return "/u/" + id }, QRFG: "#000000", QRBG: "#ffffff",
+		VCardURL: func(id string) string { return "/vcard/" + id }, AbsURL: func(p string) string { return "https://kork.example" + p }}
+	items := Build(ctx, []Block{
+		{ID: "a", Type: "contact", Data: json.RawMessage(`{"name":"P"}`)},
+		{ID: "b", Type: "contact", Data: json.RawMessage(`{"name":"P","show_qr":true}`)},
+	})
+	if len(items) != 2 || items[0].QR != "" {
+		t.Fatalf("contact without show_qr has a QR: %+v", items)
+	}
+	if items[1].QR == "" || items[1].Href != "/vcard/b" {
+		t.Fatalf("contact with show_qr: %+v", items[1])
+	}
+	want, _ := qr.SVG("https://kork.example/vcard/b", "#000000", "#ffffff")
+	if string(items[1].QR) != want {
+		t.Fatal("contact QR doesn't encode the absolute vCard URL")
 	}
 }

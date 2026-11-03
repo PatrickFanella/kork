@@ -74,6 +74,9 @@ type Contact struct {
 	Org   string `json:"org,omitempty"`
 	URL   string `json:"url,omitempty"`
 	Note  string `json:"note,omitempty"`
+	// ShowQR adds a QR code of the contact card's address, which phones open
+	// as a contact to save.
+	ShowQR bool `json:"show_qr,omitempty"`
 }
 
 type Map struct {

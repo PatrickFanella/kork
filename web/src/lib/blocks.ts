@@ -130,6 +130,12 @@ export function blockFields(type: BlockType, service?: CatalogService, ctx?: Fie
         { key: "org", label: "Organization", kind: "text" },
         { key: "url", label: "Website", kind: "url", placeholder: "https://" },
         { key: "note", label: "Note", kind: "textarea", maxLength: 500 },
+        {
+          key: "show_qr",
+          label: "Show a QR code that adds this contact",
+          kind: "checkbox",
+          hint: "Someone across the table scans it with their phone camera to save the contact.",
+        },
       ];
     case "map":
       return [
