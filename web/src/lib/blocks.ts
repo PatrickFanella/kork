@@ -5,7 +5,7 @@ import type { BlockData, BlockType, CatalogService, ServiceInput } from "../api"
 import {
   asEvents,
   cleanEvents,
-  EVENTS_FIELDS,
+  eventsFields,
   eventsProblem,
   LATEST_FIELDS,
   newBlockSummary,
@@ -75,7 +75,7 @@ export function blockFields(type: BlockType, service?: CatalogService, ctx?: Fie
     case "email_signup":
       return signupFields(ctx);
     case "events":
-      return EVENTS_FIELDS;
+      return eventsFields(ctx);
     case "latest":
       return LATEST_FIELDS;
     case "link":
@@ -130,6 +130,12 @@ export function blockFields(type: BlockType, service?: CatalogService, ctx?: Fie
         { key: "org", label: "Organization", kind: "text" },
         { key: "url", label: "Website", kind: "url", placeholder: "https://" },
         { key: "note", label: "Note", kind: "textarea", maxLength: 500 },
+        {
+          key: "show_qr",
+          label: "Show a QR code that adds this contact",
+          kind: "checkbox",
+          hint: "Someone across the table scans it with their phone camera to save the contact.",
+        },
       ];
     case "map":
       return [
@@ -180,8 +186,11 @@ export function cleanBlockData(
   const out: BlockData = {};
   for (const [key, raw] of Object.entries(data)) {
     if (type === "events" && key === "events") {
-      out.events = cleanEvents(asEvents(raw));
+      if (data.source !== "ics") out.events = cleanEvents(asEvents(raw));
       continue;
+    }
+    if (type === "events" && ((key === "ics_url" && data.source !== "ics") || key === "feed")) {
+      continue; // feed settings only apply to calendar blocks; feed status comes from the server
     }
     if (
       type === "email_signup" &&

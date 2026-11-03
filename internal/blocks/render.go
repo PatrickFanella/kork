@@ -69,6 +69,11 @@ type Context struct {
 	QRFG      string
 	QRBG      string
 	VCardURL  func(blockID string) string
+	// AbsURL turns a path on this host into an absolute URL, for QR codes.
+	AbsURL func(path string) string
+	// EventFeed returns the cached dates of an events block that reads a
+	// calendar feed.
+	EventFeed func(blockID string) []Event
 	// Now hides past events; zero means time.Now().
 	Now time.Time
 	// Latest returns the cached newest item for a latest block.
@@ -216,7 +221,13 @@ func build(ctx Context, b Block) (Item, bool) {
 		if sub == "" {
 			sub = d.Name
 		}
-		return Item{Title: "Save contact", Subtitle: sub, Href: ctx.VCardURL(b.ID), Icon: icons.Generic("contact"), Track: true}, true
+		it := Item{Title: "Save contact", Subtitle: sub, Href: ctx.VCardURL(b.ID), Icon: icons.Generic("contact"), Track: true}
+		if d.ShowQR && ctx.AbsURL != nil {
+			// The code holds the card's address rather than the vCard text,
+			// so it stays small and scannable however long the card is.
+			it.QR = ctx.qrSVG(ctx.AbsURL(it.Href))
+		}
+		return it, true
 	case "map":
 		var d Map
 		if json.Unmarshal(b.Data, &d) != nil {

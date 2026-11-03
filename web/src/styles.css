@@ -2408,3 +2408,8 @@ details.card > summary {
 details.card > summary > h3 {
   display: inline;
 }
+
+/* A calendar feed that failed its last fetch. */
+.block-summary-problem {
+  color: var(--danger);
+}

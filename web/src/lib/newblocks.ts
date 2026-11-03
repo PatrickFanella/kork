@@ -1,6 +1,6 @@
 // Form schemas and helpers for the email sign-up, events and latest blocks.
 
-import type { BlockData, EventItem } from "../api";
+import type { BlockData, BlockFeed, EventItem } from "../api";
 import type { FieldSpec } from "./blocks";
 
 export const MAX_EVENTS = 50;
@@ -121,6 +121,36 @@ export const LATEST_FIELDS: FieldSpec[] = [
 
 export const EVENTS_FIELDS: FieldSpec[] = [{ key: "events", label: "Dates", kind: "events", required: true }];
 
+/** Events fields: typed-in dates, or a calendar feed the server reads. */
+export function eventsFields(ctx: FieldContext = {}): FieldSpec[] {
+  const ics = ctx.data?.source === "ics";
+  const source: FieldSpec = {
+    key: "source",
+    label: "Where the dates come from",
+    kind: "select",
+    options: [
+      { key: "manual", name: "I'll type them in" },
+      { key: "ics", name: "A calendar feed (.ics)" },
+    ],
+    hint: ics
+      ? "The page reads the calendar every hour and shows upcoming dates. If the calendar can't be reached, the last dates stay up."
+      : undefined,
+  };
+  if (!ics) return [source, ...EVENTS_FIELDS];
+  return [
+    source,
+    {
+      key: "ics_url",
+      label: "Calendar address",
+      kind: "url",
+      required: true,
+      maxLength: 2000,
+      placeholder: "https:// or webcal://",
+      hint: "The public or \"secret\" iCal address from Google Calendar, Apple Calendar, Gancio or your gig platform.",
+    },
+  ];
+}
+
 export function emptyEvent(): EventItem {
   return { date: "", title: "" };
 }
@@ -189,4 +219,13 @@ export function newBlockSummary(type: string, data: BlockData, now = new Date())
       return s("source").replace(/^https:\/\/www\.youtube\.com\//, "");
   }
   return null;
+}
+
+/** One line for the editor about a calendar feed's last fetch. */
+export function feedStatus(feed: BlockFeed | undefined): { text: string; problem: boolean } | null {
+  if (!feed) return null;
+  const n = `${feed.found} upcoming ${feed.found === 1 ? "date" : "dates"}`;
+  const skipped = feed.dropped > 0 ? ` (${feed.dropped} skipped: no date or title)` : "";
+  if (feed.error) return { text: `${feed.error} Showing the last ${n} found.`, problem: true };
+  return { text: `${n} from the calendar${skipped}.`, problem: false };
 }

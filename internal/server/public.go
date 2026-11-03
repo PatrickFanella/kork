@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"git.subcult.tv/subculture-collective/zelda/internal/blocks"
+	"git.subcult.tv/subculture-collective/zelda/internal/catalog"
 	"git.subcult.tv/subculture-collective/zelda/internal/plans"
+	"git.subcult.tv/subculture-collective/zelda/internal/qr"
 	"git.subcult.tv/subculture-collective/zelda/internal/render"
 	"git.subcult.tv/subculture-collective/zelda/internal/store"
 )
@@ -85,6 +88,13 @@ func (s *Server) handleAtprotoDID(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(p.AtprotoDID))
 }
 
+// themeQRColors returns the theme's text and card (or page) colors for QR
+// codes when they are safe to scan, and black on white otherwise.
+func themeQRColors(t catalog.Theme) (fg, bg string) {
+	c := t.Colors
+	return qr.Pick([2]string{c.Text, c.Surface}, [2]string{c.Text, c.BG})
+}
+
 func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var u *store.User
@@ -132,14 +142,21 @@ func (s *Server) renderPage(w http.ResponseWriter, r *http.Request, p *store.Pag
 		list = append(list, blocks.Block{ID: b.ID, Type: b.Type, Data: b.Data})
 	}
 	theme := themeOf(p)
+	qrFG, qrBG := themeQRColors(theme)
+	origin := strings.TrimSuffix(s.cfg.BaseURL, "/")
+	if u, err := url.Parse(canonical); err == nil && u.Scheme != "" && u.Host != "" {
+		origin = u.Scheme + "://" + u.Host
+	}
 	ctx := blocks.Context{
 		Host:      hostOnly(r.Host),
 		UploadURL: uploadURL,
-		QRFG:      "#000000",
-		QRBG:      "#ffffff",
+		QRFG:      qrFG,
+		QRBG:      qrBG,
 		VCardURL:  func(id string) string { return "/vcard/" + id },
+		AbsURL:    func(path string) string { return origin + path },
 		Now:       now,
 		Latest:    s.latestItems(r.Context(), p, list),
+		EventFeed: s.eventFeeds(r.Context(), list),
 	}
 	n := nonce()
 	view := render.Page{

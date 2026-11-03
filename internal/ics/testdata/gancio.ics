@@ -1,0 +1,12 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//gancio//EN
+X-WR-CALNAME:Gancio
+BEGIN:VEVENT
+UID:gancio-17
+SUMMARY:Benefit show
+DTSTART;TZID="America/Chicago":20261101T210000
+LOCATION:The Hall
+URL:https://gancio.example/event/benefit-show
+END:VEVENT
+END:VCALENDAR

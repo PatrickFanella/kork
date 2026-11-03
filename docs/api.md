@@ -119,7 +119,7 @@ Categories: `social, video, music, creator, payment, crypto, contact, web`.
 | PATCH | `/api/pages/{id}` | any of `{slug, title, bio, avatar_upload_id (string or null), theme, published}` | `200 Page` |
 | DELETE | `/api/pages/{id}` | – | `204` |
 | GET | `/api/slugs/{slug}` | – | `200 {available: bool, reason?: string}` |
-| GET | `/api/pages/{id}/qr.svg` | – | SVG QR code of the public URL |
+| GET | `/api/pages/{id}/qr.svg` | – | SVG QR code of the public URL, black on white. `?colors=theme` uses the theme's colors when they pass the QR contrast rule (see below) |
 | GET | `/api/pages/{id}/stats?days=30` | – | `200 Stats`; `days` defaults to 30 and is capped at the plan's `stats_days` (Free 30, Pro 365) and at `ZELDA_STATS_RETENTION_DAYS` |
 | GET | `/api/pages/{id}/stats.csv?days=30` | – | `200 text/csv` download (Pro, see [Stats CSV](#stats-csv)) |
 | PUT | `/api/pages/{id}/css` | `{css}` | `200 {css, warnings, applied}` (Pro, see [Custom CSS](#custom-css)) |
@@ -295,11 +295,20 @@ When link screening is configured, web destinations are checked on create and up
 | `embed` | `{url}` | Must match a supported embed provider |
 | `qr` | `{value, label?}` | Renders a QR code inline |
 | `copy` | `{label, value}` | Copy-to-clipboard button |
-| `contact` | `{name, phone?, email?, org?, url?, note?}` | "Save contact" button downloading a vCard |
+| `contact` | `{name, phone?, email?, org?, url?, note?, show_qr?}` | "Save contact" button downloading a vCard. `show_qr` adds a QR code of the card's absolute `/vcard/{id}` URL on the page's own host |
 | `map` | `{address, label?}` | Opens the address in a maps app |
 | `email_signup` | `{title, description?, button_label?, destination, brevo_list_id?, brevo_api_key?}` | Email form with double opt-in. See "Email sign-up" |
 | `events` | `{events: [{date, time?, title, city?, ticket_url?, sold_out?}]}` | 1–50 dates. See "Events" |
 | `latest` | `{source, label?}` | Newest item of a YouTube channel or RSS/Atom feed. See "Latest video or post" |
+
+### Events from a calendar feed
+
+An `events` block takes `source`: `"manual"` (the default, with `events`) or `"ics"` with `ics_url`, an `http(s)` or `webcal://` address of a public iCalendar feed. `webcal://` is stored as `https://`. For a feed, `events` is ignored and cleared.
+
+- **On save.** A new or changed address is fetched through the outbound client, which refuses private addresses and limits the response to 2 MB. Saving fails with `422` `field: "ics_url"`, code `feed_failed`, when the address can't be fetched or isn't a calendar. The address is also screened as a destination. These checks share the link-preview limit.
+- **What is read.** For each `VEVENT`: `DTSTART` gives the date, plus the time unless it is a date-only value, in the event's own `TZID` zone (UTC for `Z` times). `SUMMARY` is the title, or `LOCATION` when there is no summary. `LOCATION` is the city, and `URL` is the ticket link. Events with an `RRULE` show only their first date. Events without a date or title are skipped. Past dates are dropped, and at most 50 upcoming dates are kept. Ticket links that fail validation or link screening are removed, but the date stays.
+- **Refreshing.** The result is cached per block and refreshed in the background at most hourly, or after 10 minutes when the last fetch failed. A failed refresh keeps the last good dates.
+- **Editor status.** In the page API, such a block has `feed: {found, dropped, checked_at, fetched_at, error}`.
 
 ### Email sign-up
 
@@ -431,6 +440,10 @@ On a served custom domain (verified, and covered by the owner's plan) of a live 
 `PATCH /api/pages/{id}` accepts `monetization_wallet`: a [Web Monetization](https://webmonetization.org/) wallet address. It can be an `https` URL or a payment pointer (`$wallet.example/alice`, stored as `https://wallet.example/alice`). Query strings, fragments, credentials and hosts without a dot are refused, and an empty string clears the value. Errors return `422` with `field: "monetization_wallet"`, with code `invalid`, or `blocked_destination` when link screening flags the address. The address is screened when it changes; the periodic re-check covers block links only.
 
 A live public page with a wallet, on the main host or a custom domain, includes one `<link rel="monetization" href="...">` in its head. Owner previews don't include it. The page makes no new requests itself; a visitor's Web Monetization provider reads the link. The public page CSP is unchanged. Whether the browser extension needs a CSP change hasn't been tested yet.
+
+### QR code colors
+
+Inline QR codes on public pages, and the share QR with `?colors=theme`, use the theme's text color on its card color, then text on page background. A pair is used only when its contrast ratio is at least 7:1 and the foreground is darker than the background, since some readers fail on light-on-dark codes. Otherwise the code is black on white. Of the ten presets, the light themes keep their colors and the dark themes fall back to black on white. Codes stay standalone SVG, and public pages load no extra JavaScript.
 
 ### DNS mode
 

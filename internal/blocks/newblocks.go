@@ -2,6 +2,7 @@ package blocks
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"git.subcult.tv/subculture-collective/zelda/internal/catalog"
+	"git.subcult.tv/subculture-collective/zelda/internal/ics"
 )
 
 // Email sign-up, events and latest video/post blocks (#11).
@@ -100,10 +102,19 @@ type Event struct {
 	SoldOut   bool   `json:"sold_out,omitempty"`
 }
 
-// Events is a list of upcoming dates.
+// Events is a list of upcoming dates, typed in by hand or read from a
+// public calendar feed (Source "ics").
 type Events struct {
 	Events []Event `json:"events"`
+	Source string  `json:"source,omitempty"` // "manual" (default) or "ics"
+	ICSURL string  `json:"ics_url,omitempty"`
 }
+
+// Event sources.
+const (
+	EventsManual = "manual"
+	EventsICS    = "ics"
+)
 
 // MaxEvents is the most events one block holds.
 const MaxEvents = 50
@@ -228,6 +239,19 @@ func validateEvents(raw json.RawMessage) (any, error) {
 	if err := decode(raw, &b); err != nil {
 		return nil, err
 	}
+	switch b.Source {
+	case "", EventsManual:
+		b.Source, b.ICSURL = "", ""
+	case EventsICS:
+		u, err := icsURL(b.ICSURL)
+		if err != nil {
+			return nil, err
+		}
+		b.ICSURL, b.Events = u, nil
+		return b, nil
+	default:
+		return nil, fieldErr("source", "choose where the dates come from")
+	}
 	if len(b.Events) == 0 {
 		return nil, fieldErr("events", "add at least one event")
 	}
@@ -235,35 +259,102 @@ func validateEvents(raw json.RawMessage) (any, error) {
 		return nil, fieldErr("events", fmt.Sprintf("a block can list up to %d events", MaxEvents))
 	}
 	for i := range b.Events {
-		e := &b.Events[i]
-		bad := func(msg string) error { return fieldErr("events", fmt.Sprintf("Event %d: %s", i+1, msg)) }
-		e.Date = strings.TrimSpace(e.Date)
-		d, err := time.Parse("2006-01-02", e.Date)
-		if !dateRe.MatchString(e.Date) || err != nil || d.Year() < 2000 || d.Year() > 2100 {
-			return nil, bad("enter the date as YYYY-MM-DD")
-		}
-		if e.Time = strings.TrimSpace(e.Time); e.Time != "" && !timeRe.MatchString(e.Time) {
-			return nil, bad("enter the time as HH:MM (24-hour), or leave it empty")
-		}
-		if e.Title = oneLine(e.Title); e.Title == "" {
-			return nil, bad("enter a title or venue")
-		}
-		if len([]rune(e.Title)) > 100 {
-			return nil, bad("the title must be 100 characters or fewer")
-		}
-		if e.City = oneLine(e.City); len([]rune(e.City)) > 80 {
-			return nil, bad("the city must be 80 characters or fewer")
-		}
-		if e.TicketURL = strings.TrimSpace(e.TicketURL); e.TicketURL != "" {
-			u, err := catalog.CheckLinkURL(e.TicketURL)
-			if err != nil || !isWeb(u) {
-				return nil, bad("the ticket link must be an http(s) address")
-			}
-			e.TicketURL = u
+		if err := cleanEvent(&b.Events[i]); err != nil {
+			return nil, fieldErr("events", fmt.Sprintf("Event %d: %s", i+1, err))
 		}
 	}
-	sort.SliceStable(b.Events, func(i, j int) bool { return eventKey(b.Events[i]) < eventKey(b.Events[j]) })
+	sortEvents(b.Events)
 	return b, nil
+}
+
+// icsURL accepts an http(s) or webcal:// calendar address; webcal means
+// https.
+func icsURL(raw string) (string, error) {
+	v := strings.TrimSpace(raw)
+	if rest, ok := strings.CutPrefix(strings.ToLower(v), "webcal://"); ok {
+		v = "https://" + v[len(v)-len(rest):]
+	}
+	u, err := catalog.CheckLinkURL(v)
+	if v == "" || err != nil || !isWeb(u) {
+		return "", fieldErr("ics_url", "enter the calendar's public address (https:// or webcal://)")
+	}
+	return u, nil
+}
+
+// cleanEvent normalizes one event and reports what is wrong with it.
+func cleanEvent(e *Event) error {
+	e.Date = strings.TrimSpace(e.Date)
+	d, err := time.Parse("2006-01-02", e.Date)
+	if !dateRe.MatchString(e.Date) || err != nil || d.Year() < 2000 || d.Year() > 2100 {
+		return errors.New("enter the date as YYYY-MM-DD")
+	}
+	if e.Time = strings.TrimSpace(e.Time); e.Time != "" && !timeRe.MatchString(e.Time) {
+		return errors.New("enter the time as HH:MM (24-hour), or leave it empty")
+	}
+	if e.Title = oneLine(e.Title); e.Title == "" {
+		return errors.New("enter a title or venue")
+	}
+	if len([]rune(e.Title)) > 100 {
+		return errors.New("the title must be 100 characters or fewer")
+	}
+	if e.City = oneLine(e.City); len([]rune(e.City)) > 80 {
+		return errors.New("the city must be 80 characters or fewer")
+	}
+	if e.TicketURL = strings.TrimSpace(e.TicketURL); e.TicketURL != "" {
+		u, err := catalog.CheckLinkURL(e.TicketURL)
+		if err != nil || !isWeb(u) {
+			return errors.New("the ticket link must be an http(s) address")
+		}
+		e.TicketURL = u
+	}
+	return nil
+}
+
+func sortEvents(list []Event) {
+	sort.SliceStable(list, func(i, j int) bool { return eventKey(list[i]) < eventKey(list[j]) })
+}
+
+// EventsFromFeed turns calendar feed events into block events: dates and
+// times in each event's own zone, summary as the title (or the location
+// when there is no summary), location as the city, URL as the ticket link.
+// Events that end up invalid are dropped and counted; long text is cut.
+// Only events from the day before now onwards are kept, up to MaxEvents.
+func EventsFromFeed(feed []ics.Event, now time.Time) (out []Event, dropped int) {
+	cut := func(s string, n int) string {
+		s = oneLine(s)
+		if r := []rune(s); len(r) > n {
+			return strings.TrimSpace(string(r[:n-1])) + "…"
+		}
+		return s
+	}
+	from := now.UTC().Add(-24 * time.Hour).Format("2006-01-02")
+	for _, f := range feed {
+		e := Event{Date: f.Start.Format("2006-01-02"), Title: cut(f.Summary, 100), City: cut(f.Location, 80), TicketURL: f.URL}
+		if !f.AllDay {
+			e.Time = f.Start.Format("15:04")
+		}
+		if e.Title == "" {
+			e.Title, e.City = e.City, ""
+		}
+		if e.TicketURL != "" {
+			if u, err := catalog.CheckLinkURL(e.TicketURL); err != nil || !isWeb(u) {
+				e.TicketURL = ""
+			}
+		}
+		if cleanEvent(&e) != nil {
+			dropped++
+			continue
+		}
+		if e.Date < from {
+			continue
+		}
+		out = append(out, e)
+	}
+	sortEvents(out)
+	if len(out) > MaxEvents {
+		out = out[:MaxEvents]
+	}
+	return out, dropped
 }
 
 func eventKey(e Event) string {
@@ -398,6 +489,13 @@ func signupLabel(raw json.RawMessage) string {
 func eventsLabel(raw json.RawMessage) string {
 	var b Events
 	_ = json.Unmarshal(raw, &b)
+	if b.Source == EventsICS {
+		host := b.ICSURL
+		if u, err := url.Parse(b.ICSURL); err == nil && u.Host != "" {
+			host = u.Host
+		}
+		return "Events from " + truncate(host, 50)
+	}
 	if len(b.Events) == 1 {
 		return "Events: " + truncate(b.Events[0].Title, 50)
 	}
@@ -484,7 +582,14 @@ func buildNew(ctx Context, b Block) (Item, bool, bool) {
 		if now.IsZero() {
 			now = time.Now()
 		}
-		up := UpcomingEvents(d.Events, now)
+		list := d.Events
+		if d.Source == EventsICS {
+			if ctx.EventFeed == nil {
+				return Item{}, false, true
+			}
+			list = ctx.EventFeed(b.ID)
+		}
+		up := UpcomingEvents(list, now)
 		if len(up) == 0 {
 			return Item{}, false, true
 		}

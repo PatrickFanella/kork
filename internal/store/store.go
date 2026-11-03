@@ -320,7 +320,19 @@ type Block struct {
 	Enabled  bool            `json:"enabled"`
 	Position int             `json:"position"`
 	Label    string          `json:"label"`
+	// Feed is the calendar status of an events block that reads a feed;
+	// set only in the editor's page view.
+	Feed *BlockFeed `json:"feed,omitempty"`
 	Schedule
+}
+
+// BlockFeed is what the editor shows about a calendar feed.
+type BlockFeed struct {
+	Found     int        `json:"found"`
+	Dropped   int        `json:"dropped"`
+	CheckedAt time.Time  `json:"checked_at"`
+	FetchedAt *time.Time `json:"fetched_at"`
+	Error     string     `json:"error"`
 }
 
 const blockCols = `id, page_id, type, data, enabled, position, starts_at, ends_at`

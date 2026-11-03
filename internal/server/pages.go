@@ -175,6 +175,7 @@ func (s *Server) writePage(w http.ResponseWriter, r *http.Request, status int, p
 	for _, b := range bl {
 		b.Label = blocks.Label(b.Type, b.Data)
 	}
+	s.eventFeedStatus(r.Context(), bl)
 	ds, err := s.store.Domains(r.Context(), p.ID)
 	if err != nil {
 		s.serverErr(w, r, err)
@@ -463,7 +464,11 @@ func (s *Server) handlePageQR(w http.ResponseWriter, r *http.Request) {
 	if p == nil {
 		return
 	}
-	svg, err := qr.SVG(s.pageURL(p.Slug), "#000000", "#ffffff")
+	fg, bg := qr.PlainFG, qr.PlainBG
+	if r.URL.Query().Get("colors") == "theme" {
+		fg, bg = themeQRColors(themeOf(p))
+	}
+	svg, err := qr.SVG(s.pageURL(p.Slug), fg, bg)
 	if err != nil {
 		s.serverErr(w, r, err)
 		return
