@@ -293,6 +293,8 @@ export interface SignupContacts {
   pending: number;
   /** Confirmed addresses Brevo hasn't accepted yet; retried automatically. */
   awaiting_push: number;
+  /** Why the last delivery attempt failed, if it did. Missing on older servers. */
+  push_problem?: string;
 }
 
 export interface AccountSettings {

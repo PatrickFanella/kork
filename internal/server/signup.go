@@ -73,9 +73,41 @@ func (s *Server) SetSecretKey(key []byte) error {
 	return nil
 }
 
-// brevoPushGiveUp is how long a confirmed address waits for Brevo before
-// it is dropped.
+// brevoPushGiveUp is how long Brevo can keep refusing a confirmed address
+// before it is dropped. Failures on Kork's side, such as a key that can't be
+// unsealed, never drop an address.
 const brevoPushGiveUp = 7 * 24 * time.Hour
+
+// Retry spacing for Brevo deliveries: 15 minutes after the first failure,
+// doubling up to 12 hours.
+const (
+	brevoRetryFirst = 15 * time.Minute
+	brevoRetryMax   = 12 * time.Hour
+)
+
+func brevoRetryAfter(attempts int) time.Duration {
+	d := brevoRetryFirst
+	for i := 0; i < attempts && d < brevoRetryMax; i++ {
+		d *= 2
+	}
+	return min(d, brevoRetryMax)
+}
+
+// pushProblem turns a delivery error into a message safe to show the page
+// owner and reports whether Brevo itself refused the request.
+func pushProblem(err error) (msg string, rejected bool) {
+	switch {
+	case errors.Is(err, seal.ErrOpen), errors.Is(err, store.ErrNotFound):
+		return "The saved Brevo API key can't be read on this server. Enter the key again to resume sending.", false
+	case errors.Is(err, brevo.ErrUnauthorized):
+		return "Brevo rejected the API key. Enter a new key.", true
+	case errors.Is(err, brevo.ErrListNotFound):
+		return "Brevo has no list with this ID. Check the list ID.", true
+	case brevo.Rejected(err):
+		return "Brevo refused the address.", true
+	}
+	return "Brevo couldn't be reached. Sending will be retried.", false
+}
 
 func signupData(raw json.RawMessage) blocks.Signup {
 	var d blocks.Signup
@@ -309,8 +341,11 @@ func (s *Server) handleSubscribeConfirm(w http.ResponseWriter, r *http.Request) 
 	title := s.cfg.AppName
 	if b, p, err := s.store.BlockByID(r.Context(), c.BlockID); err == nil {
 		title = p.Title
-		if signupData(b.Data).Destination == blocks.DestBrevo {
-			s.deliverToBrevo(r.Context(), b, c.ID, c.Email)
+		if c.PendingPush {
+			// The contact is already marked as waiting, so a failure here is
+			// retried by RunSignupJobs. Don't let the visitor closing the tab
+			// cancel the delivery.
+			s.deliverToBrevo(context.WithoutCancel(r.Context()), b, store.PendingPush{ConfirmedSignup: *c, ConfirmedAt: s.now()})
 		}
 	}
 	page.Title, page.Heading = "Subscribed", "You're subscribed"
@@ -318,23 +353,36 @@ func (s *Server) handleSubscribeConfirm(w http.ResponseWriter, r *http.Request) 
 	s.writeSimple(w, http.StatusOK, page)
 }
 
-// deliverToBrevo sends a confirmed address to Brevo and deletes it here. If
-// Brevo fails, the address is kept for RunSignupJobs to retry.
-func (s *Server) deliverToBrevo(ctx context.Context, b *store.Block, contactID, email string) {
-	if err := s.pushToBrevo(ctx, b, email); err != nil {
-		s.log.Warn("brevo delivery failed; will retry", "block", b.ID, "err", err)
-		if err := s.store.SetSignupPendingPush(ctx, contactID, true); err != nil {
-			s.log.Error("mark brevo retry", "err", err)
+// deliverToBrevo sends a waiting address to Brevo and deletes it here. On
+// failure it schedules the next attempt. An address Brevo has refused for
+// longer than brevoPushGiveUp is dropped.
+func (s *Server) deliverToBrevo(ctx context.Context, b *store.Block, c store.PendingPush) {
+	err := s.pushToBrevo(ctx, b, c.Email)
+	if err == nil {
+		if err := s.store.DeleteSignupContact(ctx, c.ID); err != nil {
+			s.log.Error("delete delivered contact", "err", err)
 		}
 		return
 	}
-	if err := s.store.DeleteSignupContact(ctx, contactID); err != nil {
-		s.log.Error("delete delivered contact", "err", err)
+	now := s.now()
+	msg, rejected := pushProblem(err)
+	if rejected && now.Sub(c.ConfirmedAt) > brevoPushGiveUp {
+		s.log.Warn("dropping sign-up Brevo kept refusing", "block", b.ID, "err", err)
+		_ = s.store.DeleteSignupContact(ctx, c.ID)
+		return
+	}
+	if rejected {
+		s.log.Warn("brevo refused a sign-up; will retry", "block", b.ID, "err", err)
+	} else {
+		s.log.Warn("brevo delivery failed; will retry", "block", b.ID, "err", err)
+	}
+	if err := s.store.RecordPushFailure(ctx, c.ID, now.Add(brevoRetryAfter(c.Attempts)), msg, rejected); err != nil {
+		s.log.Error("record brevo retry", "err", err)
 	}
 }
 
-// SignupJobsOnce deletes expired confirmation requests and retries Brevo
-// deliveries. Addresses Brevo has not accepted after a week are dropped.
+// SignupJobsOnce deletes expired confirmation requests and retries due
+// Brevo deliveries.
 func (s *Server) SignupJobsOnce(ctx context.Context) error {
 	now := s.now()
 	if n, err := s.store.PurgeExpiredSignups(ctx, now); err != nil {
@@ -342,11 +390,14 @@ func (s *Server) SignupJobsOnce(ctx context.Context) error {
 	} else if n > 0 {
 		s.log.Info("deleted unconfirmed sign-ups", "count", n)
 	}
-	list, err := s.store.PendingPushes(ctx, 200)
+	list, err := s.store.PendingPushes(ctx, now, 200)
 	if err != nil {
 		return err
 	}
 	for _, c := range list {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		b, _, err := s.store.BlockByID(ctx, c.BlockID)
 		if err != nil {
 			continue
@@ -356,12 +407,7 @@ func (s *Server) SignupJobsOnce(ctx context.Context) error {
 			_ = s.store.SetSignupPendingPush(ctx, c.ID, false)
 			continue
 		}
-		if err := s.pushToBrevo(ctx, b, c.Email); err == nil {
-			_ = s.store.DeleteSignupContact(ctx, c.ID)
-		} else if now.Sub(c.ConfirmedAt) > brevoPushGiveUp {
-			s.log.Warn("dropping sign-up Brevo never accepted", "block", b.ID, "err", err)
-			_ = s.store.DeleteSignupContact(ctx, c.ID)
-		}
+		s.deliverToBrevo(ctx, b, c)
 	}
 	return nil
 }
@@ -415,7 +461,8 @@ func (s *Server) handleListContacts(w http.ResponseWriter, r *http.Request) {
 		s.serverErr(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"contacts": list, "pending": counts.Pending, "awaiting_push": counts.AwaitingPush})
+	writeJSON(w, http.StatusOK, map[string]any{"contacts": list, "pending": counts.Pending, "awaiting_push": counts.AwaitingPush,
+		"push_problem": counts.PushProblem})
 }
 
 // csvCell stops spreadsheet apps from running a value as a formula.
