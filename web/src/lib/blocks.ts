@@ -168,8 +168,9 @@ export function serviceValueLabel(input: ServiceInput): string {
 }
 
 /**
- * Trim strings, drop empty optional fields, strip a typed service prefix, and
- * keep booleans only when true. Unknown keys are preserved.
+ * Trim strings, drop empty optional fields, strip a typed service prefix,
+ * send numbers as strings, and keep booleans only when true. Unknown keys are
+ * preserved.
  */
 export function cleanBlockData(
   type: BlockType,
@@ -187,6 +188,11 @@ export function cleanBlockData(
     }
     if (typeof raw === "boolean") {
       if (raw) out[key] = true;
+      continue;
+    }
+    if (typeof raw === "number") {
+      // The server returns some fields, such as brevo_list_id, as numbers.
+      if (Number.isFinite(raw)) out[key] = String(raw);
       continue;
     }
     if (typeof raw !== "string") continue;

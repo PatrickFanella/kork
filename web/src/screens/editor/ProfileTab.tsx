@@ -146,7 +146,7 @@ function DetailsSection({ page, setPage, saved }: EditorProps) {
       />
       <form className="stack" onSubmit={onSubmit} noValidate>
         {errors.general && <Notice tone="danger">{errors.general}</Notice>}
-        <TextField label="Title" value={title} onChange={(v) => { setTitle(v); setOk(false); }} required maxLength={120} error={errors.title} />
+        <TextField label="Title" value={title} onChange={(v) => { setTitle(v); setOk(false); }} required maxLength={80} error={errors.title} />
         <TextField
           label="Bio"
           value={bio}

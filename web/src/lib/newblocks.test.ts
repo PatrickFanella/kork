@@ -28,6 +28,12 @@ describe("email sign-up form", () => {
       cleanBlockData("email_signup", { title: "News", destination: "brevo", brevo_list_id: " 7 ", brevo_api_key: "", brevo_key_set: true }),
     ).toEqual({ title: "News", destination: "brevo", brevo_list_id: "7" });
   });
+
+  it("keeps a list ID the server returned as a number", () => {
+    // The API stores brevo_list_id as a number; dropping it made every edit fail.
+    const saved = { title: "News", destination: "brevo", brevo_list_id: 7, brevo_key_set: true } as never;
+    expect(cleanBlockData("email_signup", saved)).toEqual({ title: "News", destination: "brevo", brevo_list_id: "7" });
+  });
 });
 
 describe("events", () => {

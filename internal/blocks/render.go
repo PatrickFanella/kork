@@ -46,6 +46,20 @@ type Item struct {
 	Datetime string
 }
 
+// dialHref matches the tel: and sms: links that catalog validation produces.
+var dialHref = regexp.MustCompile(`^(tel|sms):\+?[0-9 ()./-]{5,24}$`)
+
+// Link is the href for templates. html/template only allows http, https and
+// mailto URLs and replaces anything else with #ZgotmplZ, so tel: and sms:
+// links that match the validated phone format are marked safe here. Every
+// other value stays a plain string and is still filtered by the template.
+func (it Item) Link() any {
+	if dialHref.MatchString(it.Href) {
+		return template.URL(it.Href) //nolint:gosec // limited to digits and phone punctuation
+	}
+	return it.Href
+}
+
 // Context carries per-request rendering inputs.
 type Context struct {
 	Host      string // request host, used for Twitch's parent parameter
