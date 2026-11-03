@@ -243,6 +243,8 @@ export interface Page {
   custom_css?: string;
   /** Bluesky DID served at /.well-known/atproto-did on custom domains. Missing on older servers. */
   atproto_did?: string;
+  /** Web Monetization wallet address. Missing on older servers. */
+  monetization_wallet?: string;
   created_at: string;
   updated_at: string;
 }
@@ -255,6 +257,7 @@ export interface PagePatch {
   theme?: ThemePatch;
   published?: boolean;
   atproto_did?: string;
+  monetization_wallet?: string;
 }
 
 export interface SlugCheck {

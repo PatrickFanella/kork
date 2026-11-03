@@ -148,6 +148,9 @@ func (s *Server) renderPage(w http.ResponseWriter, r *http.Request, p *store.Pag
 		Preview: preview, Live: p.Live(), Nonce: n, Badges: badges,
 		HideBranding: theme.HideBranding && s.ownerCan(r.Context(), p.UserID, plans.RemoveBranding),
 	}
+	if !preview && p.Live() {
+		view.MonetizationWallet = p.MonetizationWallet
+	}
 	pro := s.proStyleFor(r.Context(), p, theme)
 	view.CustomCSS, view.FontBody, view.FontDisplay = pro.CSS, pro.FontBody, pro.FontDisplay
 	if p.AvatarUploadID != nil {

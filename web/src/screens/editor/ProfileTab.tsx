@@ -4,7 +4,7 @@ import { useAuth } from "../../auth";
 import { SlugStatusBadge, slugStatusError } from "../../components/SlugStatus";
 import { ImageField, Notice, Spinner, Switch, TextField } from "../../components/ui";
 import { useSlugCheck } from "../../lib/useSlugCheck";
-import { normalizeSlug } from "../../lib/validate";
+import { normalizeSlug, walletProblem } from "../../lib/validate";
 import type { EditorProps } from "./types";
 
 export function ProfileTab(props: EditorProps) {
@@ -13,6 +13,7 @@ export function ProfileTab(props: EditorProps) {
       <PublishSection {...props} />
       <DetailsSection {...props} />
       <AddressSection {...props} />
+      <MonetizationSection {...props} />
     </div>
   );
 }
@@ -229,5 +230,66 @@ function AddressSection({ page, setPage, saved }: EditorProps) {
         </div>
       </form>
     </section>
+  );
+}
+
+// Web Monetization is rarely used, so it sits in a collapsed section.
+function MonetizationSection({ page, setPage, saved }: EditorProps) {
+  const [wallet, setWallet] = useState(page.monetization_wallet ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const value = wallet.trim();
+  const problem = walletProblem(value);
+  const changed = value !== (page.monetization_wallet ?? "");
+
+  async function onSave(e: FormEvent) {
+    e.preventDefault();
+    if (problem) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const p = await api.updatePage(page.id, { monetization_wallet: value });
+      setPage((prev) => ({ ...prev, monetization_wallet: p.monetization_wallet ?? "" }));
+      setWallet(p.monetization_wallet ?? "");
+      saved();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <details className="card section" open={Boolean(page.monetization_wallet)}>
+      <summary>
+        <h3>Advanced: Web Monetization</h3>
+      </summary>
+      <p className="muted small">
+        Visitors with a Web Monetization provider can send small payments straight to your wallet while they view your page.
+        Kork never handles the money. Your wallet provider gives you the address.{" "}
+        <a href="https://webmonetization.org/" target="_blank" rel="noreferrer">
+          About Web Monetization
+        </a>
+      </p>
+      <form className="stack" onSubmit={onSave} noValidate>
+        <TextField
+          label="Wallet address"
+          name="monetization_wallet"
+          value={wallet}
+          onChange={setWallet}
+          placeholder="https://wallet.example/you or $wallet.example/you"
+          maxLength={300}
+          spellCheck={false}
+          error={problem}
+        />
+        <div>
+          <button type="submit" className="btn" disabled={busy || !changed || problem !== null}>
+            {busy ? <Spinner label="Saving" /> : null}
+            <span>{value === "" && changed ? "Remove wallet" : "Save wallet"}</span>
+          </button>
+        </div>
+      </form>
+      {error && <Notice tone="danger">{error}</Notice>}
+    </details>
   );
 }

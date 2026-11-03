@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -281,6 +282,30 @@ func (s *Server) handleGetPage(w http.ResponseWriter, r *http.Request) {
 // did:plc (24 base32 characters) and did:web (a lowercase domain).
 var atprotoDIDRe = regexp.MustCompile(`^(did:plc:[a-z2-7]{24}|did:web:[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+)$`)
 
+// normalizeWallet accepts a Web Monetization wallet address: an https URL,
+// or a payment pointer ($wallet.example/alice), which means the same URL
+// with https://. It returns "" for an empty value.
+func normalizeWallet(raw string) (string, error) {
+	v := strings.TrimSpace(raw)
+	if v == "" {
+		return "", nil
+	}
+	if strings.HasPrefix(v, "$") {
+		v = "https://" + v[1:]
+	}
+	bad := errors.New("enter a wallet address starting with https:// or a payment pointer starting with $")
+	if len(v) > 300 {
+		return "", bad
+	}
+	u, err := url.Parse(v)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" ||
+		u.Opaque != "" || strings.ContainsAny(u.Host, " \t") || !strings.Contains(u.Hostname(), ".") {
+		return "", bad
+	}
+	u.Host = strings.ToLower(u.Host)
+	return u.String(), nil
+}
+
 func (s *Server) handleUpdatePage(w http.ResponseWriter, r *http.Request) {
 	p := s.ownedPage(w, r)
 	if p == nil {
@@ -294,6 +319,7 @@ func (s *Server) handleUpdatePage(w http.ResponseWriter, r *http.Request) {
 		Theme          *json.RawMessage `json:"theme"`
 		Published      *bool            `json:"published"`
 		AtprotoDID     *string          `json:"atproto_did"`
+		Wallet         *string          `json:"monetization_wallet"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
@@ -307,6 +333,24 @@ func (s *Server) handleUpdatePage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		p.AtprotoDID = did
+	}
+	if body.Wallet != nil {
+		wallet, err := normalizeWallet(*body.Wallet)
+		if err != nil {
+			writeErr(w, http.StatusUnprocessableEntity, "invalid", err.Error(), "monetization_wallet")
+			return
+		}
+		if wallet != "" && wallet != p.MonetizationWallet {
+			bad, err := s.unsafeURLs(r.Context(), []string{wallet})
+			if err != nil {
+				s.log.Warn("wallet screening incomplete; allowing it", "err", err)
+			}
+			if _, ok := bad[wallet]; ok {
+				writeErr(w, http.StatusUnprocessableEntity, "blocked_destination", blockedMessage(wallet), "monetization_wallet")
+				return
+			}
+		}
+		p.MonetizationWallet = wallet
 	}
 	if body.Slug != nil {
 		slug := strings.ToLower(strings.TrimSpace(*body.Slug))

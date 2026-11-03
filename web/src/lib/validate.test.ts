@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   atprotoDIDProblem,
+  walletProblem,
   contrastRatio,
   fillDays,
   hostnameProblem,
@@ -107,6 +108,17 @@ describe("atprotoDIDProblem", () => {
   it("rejects anything else", () => {
     for (const bad of ["did:plc:short", "did:plc:ABCDEFGHIJKLMNOPQRSTUVWX", "did:key:z6Mk", "did:web:localhost", "@alice.bsky.social"]) {
       expect(atprotoDIDProblem(bad)).not.toBeNull();
+    }
+  });
+});
+
+describe("walletProblem", () => {
+  it("accepts https URLs and payment pointers", () => {
+    for (const ok of ["", "https://wallet.example/alice", "$wallet.example/alice"]) expect(walletProblem(ok)).toBeNull();
+  });
+  it("rejects other values", () => {
+    for (const bad of ["http://wallet.example/a", "wallet.example/a", "$", "https://wallet.example/a?x=1", "https://localhost/a"]) {
+      expect(walletProblem(bad)).not.toBeNull();
     }
   });
 });
