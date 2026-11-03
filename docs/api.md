@@ -67,9 +67,25 @@ Password checks on these endpoints are limited to 10 attempts per 15 minutes per
 
 The email-change link is `/app/confirm-email?token=...` and expires after 24 hours. Requesting another change replaces the pending one. Until confirmation the account keeps its old address.
 
-The export ZIP holds `account.json` (`exported_at, email, email_verified, created_at, terms_version, terms_accepted_at, pages: [Page fields + custom_css, blocks, domains: [{hostname, verified, created_at}], stats: [{block_id, day, count}], signup_contacts: [{id, block_id, email, confirmed_at}]], uploads: [{id, content_type, size, file}]`) and each uploaded image or font at its `file` path (`uploads/<id>.<ext>`). Stats rows with the zero block ID are page views.
+The export ZIP holds `account.json` (`format_version` (currently `1`; absent in exports from before it was added), `exported_at, email, email_verified, created_at, terms_version, terms_accepted_at, pages: [Page fields + custom_css, blocks, domains: [{hostname, verified, created_at}], stats: [{block_id, day, count}], signup_contacts: [{id, block_id, email, confirmed_at}]], uploads: [{id, content_type, size, file}]`) and each uploaded image or font at its `file` path (`uploads/<id>.<ext>`). Stats rows with the zero block ID are page views.
 
 `signup_contacts` lists confirmed addresses kept in Kork by the page's email sign-up blocks. Brevo API keys are never exported.
+
+The export is streamed with a 10-minute write deadline instead of the server's usual 30 seconds, so accounts with many uploads still download completely on slow connections.
+
+### Importing pages from an export
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| POST | `/api/import/export/preview` | multipart `file` (the export ZIP) | `200 {pages: [{index, slug, title, blocks, slug_available}]}` |
+| POST | `/api/import/export` | multipart `file`, and `pages` as JSON `[{index, slug}]` | `200 {pages: [{id, slug}], skipped: [{page, what, reason}]}` |
+
+Both need `X-Requested-With: zelda` and share a limit of 10 per account per hour (`429`).
+
+- **Archive checks.** The ZIP may be up to 64 MB. It's rejected with `422 invalid_export` (`field: "file"`) when it isn't a ZIP, has no `account.json`, has more than 5,000 entries, or contains an absolute path, `..` or backslash in a name, or a duplicate name. `account.json` may expand to at most 16 MB and each upload to 5 MB, checked while reading, so a ZIP bomb is refused. A `format_version` newer than the server knows returns `422 unsupported_version`.
+- **Page selection.** Each chosen page is created as an unpublished draft under its new `slug` (`422 invalid_slug` for a bad or repeated name), within the plan's page limit. A taken name or a full page limit is reported in `skipped`, and other pages are still imported.
+- **What is recreated.** Title, bio, theme (normalized), Bluesky DID and Web Monetization wallet (validated and screened), custom CSS (sanitized again; inactive without Pro, as when a plan lapses) and blocks with their schedules. Blocks are validated and screened as in the editor; a block that fails either is left out and reported. Images and fonts the page uses are copied as new uploads owned by the importer, checked by content and size, and count against the hourly upload limit. Email sign-up blocks that sent to Brevo or listmonk keep their list in Kork, because provider keys aren't exported and visitors agreed to the original list.
+- **Never imported.** Sign-up contacts, stats, custom domains, sessions and account fields.
 
 Deleting an account removes the user, billing state (including the Patreon connection; a live Stripe subscription is canceled first), sessions, tokens, pending email changes, uploads rows and files, pages, blocks, domains, reports about those pages, stats, and sign-up addresses and Brevo keys. Its public pages return 404.
 
