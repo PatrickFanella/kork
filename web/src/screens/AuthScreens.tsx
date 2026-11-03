@@ -314,7 +314,7 @@ export function ResetScreen() {
 export function VerifyScreen() {
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
-  const { user, setUser } = useAuth();
+  const { user, refresh } = useAuth();
   const [state, setState] = useState<"working" | "done" | { error: string }>(token ? "working" : { error: "This link is missing its token." });
   const started = useRef(false);
 
@@ -323,12 +323,15 @@ export function VerifyScreen() {
     started.current = true;
     api
       .verify(token)
-      .then((u) => {
-        setUser(u);
+      .then(async () => {
+        // Verifying doesn't sign anyone in. Reload the session so a browser
+        // that isn't signed in, or is signed in as someone else, isn't shown
+        // the verified account.
+        await refresh();
         setState("done");
       })
       .catch((err: unknown) => setState({ error: errorMessage(err) }));
-  }, [token, setUser]);
+  }, [token, refresh]);
 
   return (
     <AuthLayout title={state === "done" ? "Email confirmed" : state === "working" ? "Confirming your email" : "We couldn't confirm your email"}>
@@ -340,8 +343,8 @@ export function VerifyScreen() {
       {state === "done" && (
         <div className="stack">
           <Notice tone="success">That's your email confirmed. A new account can publish once it's 24 hours old.</Notice>
-          <Link className="btn btn-primary btn-block" to="/">
-            Go to your pages
+          <Link className="btn btn-primary btn-block" to={user ? "/" : "/login"}>
+            {user ? "Go to your pages" : "Sign in"}
           </Link>
         </div>
       )}
