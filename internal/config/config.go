@@ -24,6 +24,14 @@ type Config struct {
 	DomainTarget string
 	// TrustProxy uses X-Forwarded-For for client IPs (set behind Caddy).
 	TrustProxy bool
+	// ClientIPHeader, when set with TrustProxy, is a header the proxy sets to
+	// the visitor's address (such as CF-Connecting-IP); it wins over
+	// X-Forwarded-For.
+	ClientIPHeader string
+	// ProxyHops, when set with TrustProxy, picks the X-Forwarded-For entry
+	// this many places from the right: 1 when one proxy appends the client
+	// address, 2 for two proxies. 0 keeps the leftmost entry.
+	ProxyHops int
 	// SecureCookies sets the Secure flag; on unless BaseURL is http.
 	SecureCookies bool
 	// AdminEmails grants admin to these addresses once they are verified.
@@ -92,18 +100,19 @@ func env(key, def string) string {
 // Load reads ZELDA_* environment variables.
 func Load() (*Config, error) {
 	c := &Config{
-		Addr:         env("ZELDA_ADDR", ":8080"),
-		DatabaseURL:  env("ZELDA_DATABASE_URL", ""),
-		BaseURL:      strings.TrimSuffix(env("ZELDA_BASE_URL", "http://localhost:8080"), "/"),
-		AppName:      env("ZELDA_APP_NAME", "Kork"),
-		UploadDir:    env("ZELDA_UPLOAD_DIR", "./data/uploads"),
-		DomainTarget: env("ZELDA_DOMAIN_TARGET", ""),
-		TrustProxy:   env("ZELDA_TRUST_PROXY", "false") == "true",
-		SMTPHost:     env("ZELDA_SMTP_HOST", ""),
-		SMTPUser:     env("ZELDA_SMTP_USER", ""),
-		SMTPPass:     env("ZELDA_SMTP_PASSWORD", ""),
-		MailFrom:     env("ZELDA_MAIL_FROM", ""),
-		ContactEmail: env("ZELDA_CONTACT_EMAIL", "info@subcult.tv"),
+		Addr:           env("ZELDA_ADDR", ":8080"),
+		DatabaseURL:    env("ZELDA_DATABASE_URL", ""),
+		BaseURL:        strings.TrimSuffix(env("ZELDA_BASE_URL", "http://localhost:8080"), "/"),
+		AppName:        env("ZELDA_APP_NAME", "Kork"),
+		UploadDir:      env("ZELDA_UPLOAD_DIR", "./data/uploads"),
+		DomainTarget:   env("ZELDA_DOMAIN_TARGET", ""),
+		TrustProxy:     env("ZELDA_TRUST_PROXY", "false") == "true",
+		ClientIPHeader: env("ZELDA_CLIENT_IP_HEADER", ""),
+		SMTPHost:       env("ZELDA_SMTP_HOST", ""),
+		SMTPUser:       env("ZELDA_SMTP_USER", ""),
+		SMTPPass:       env("ZELDA_SMTP_PASSWORD", ""),
+		MailFrom:       env("ZELDA_MAIL_FROM", ""),
+		ContactEmail:   env("ZELDA_CONTACT_EMAIL", "info@subcult.tv"),
 	}
 	c.CustomDomains = env("ZELDA_CUSTOM_DOMAINS", "true") == "true"
 	c.CloudflareToken = env("ZELDA_CLOUDFLARE_TOKEN", "")
@@ -144,6 +153,10 @@ func Load() (*Config, error) {
 	c.FreePageLimit, err = strconv.Atoi(env("ZELDA_FREE_PAGE_LIMIT", "5"))
 	if err != nil || c.FreePageLimit < 1 {
 		return nil, errors.New("ZELDA_FREE_PAGE_LIMIT must be a number of pages, at least 1")
+	}
+	c.ProxyHops, err = strconv.Atoi(env("ZELDA_PROXY_HOPS", "0"))
+	if err != nil || c.ProxyHops < 0 || c.ProxyHops > 10 {
+		return nil, errors.New("ZELDA_PROXY_HOPS must be a number of proxies from 0 to 10")
 	}
 	if c.DatabaseURL == "" {
 		return nil, errors.New("ZELDA_DATABASE_URL is required")

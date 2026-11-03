@@ -97,6 +97,10 @@ func run(log *slog.Logger) error {
 	}
 	// Removes abandoned unverified domains and, with Cloudflare, rechecks pending ones.
 	go app.RunDomainRefresh(ctx, 10*time.Minute)
+	if cfg.TrustProxy && cfg.ClientIPHeader == "" && cfg.ProxyHops == 0 {
+		log.Warn("ZELDA_TRUST_PROXY uses the leftmost X-Forwarded-For entry, which clients can forge when a proxy appends to the header; " +
+			"set ZELDA_CLIENT_IP_HEADER or ZELDA_PROXY_HOPS")
+	}
 	if cfg.PublishMinAge > 0 {
 		log.Info("new accounts can publish after", "min_age", cfg.PublishMinAge.String())
 	}
@@ -123,7 +127,12 @@ func run(log *slog.Logger) error {
 		log.Info("shutting down")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		return srv.Shutdown(shutdownCtx)
+		err := srv.Shutdown(shutdownCtx)
+		// Requests are done; let emails they queued finish sending.
+		if werr := app.WaitMail(shutdownCtx); werr != nil {
+			log.Warn("shutdown: some emails may not have been sent", "err", werr)
+		}
+		return err
 	}
 	return nil
 }

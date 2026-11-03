@@ -15,6 +15,7 @@ import (
 	"path"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"time"
 
 	"git.subcult.tv/subculture-collective/zelda/internal/cloudflare"
@@ -38,6 +39,7 @@ type Server struct {
 	cfg      *config.Config
 	store    *store.Store
 	mail     mail.Sender
+	mailWG   sync.WaitGroup // background sends; see WaitMail
 	log      *slog.Logger
 	resolver Resolver
 	editor   fs.FS            // built SPA (web/dist)
@@ -391,11 +393,36 @@ func (s *Server) recoverer(next http.Handler) http.Handler {
 	})
 }
 
-// clientIP returns the visitor address, trusting X-Forwarded-For only behind a proxy.
+// clientIP returns the visitor address. Behind a proxy (TrustProxy) it uses,
+// in order: the ClientIPHeader the proxy sets (such as CF-Connecting-IP);
+// the X-Forwarded-For entry ProxyHops from the right, which the nearest
+// trusted proxies wrote; or, when neither is configured, the leftmost entry.
+// The leftmost entry is client-controlled when a proxy appends to the
+// header, so production should set one of the first two (#55).
 func (s *Server) clientIP(r *http.Request) string {
 	if s.cfg.TrustProxy {
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			return strings.TrimSpace(strings.Split(xff, ",")[0])
+		if h := s.cfg.ClientIPHeader; h != "" {
+			if v := strings.TrimSpace(r.Header.Get(h)); v != "" {
+				return v
+			}
+		} else if xff := r.Header.Values("X-Forwarded-For"); len(xff) > 0 {
+			var parts []string
+			for _, line := range xff {
+				for _, p := range strings.Split(line, ",") {
+					if p = strings.TrimSpace(p); p != "" {
+						parts = append(parts, p)
+					}
+				}
+			}
+			if n := s.cfg.ProxyHops; n > 0 && len(parts) > 0 {
+				if n > len(parts) {
+					n = len(parts)
+				}
+				return parts[len(parts)-n]
+			}
+			if len(parts) > 0 {
+				return parts[0]
+			}
 		}
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)

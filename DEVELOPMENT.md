@@ -75,7 +75,9 @@ Ports 80 and 443 must reach Caddy for ACME. If the service sits behind an existi
 
 ### Behind an existing proxy
 
-`docker-compose.proxy.yml` runs only Postgres and the app, published on `ZELDA_PUBLISH`. Point the proxy's hostname at that port, set `ZELDA_TRUST_PROXY=true`, and set `ZELDA_CUSTOM_DOMAINS=false` unless the proxy can issue certificates for arbitrary hostnames. The editor then hides the Domains tab.
+`docker-compose.proxy.yml` runs only Postgres and the app, published on `ZELDA_PUBLISH`. Point the proxy's hostname at that port, set `ZELDA_TRUST_PROXY=true` together with `ZELDA_CLIENT_IP_HEADER` or `ZELDA_PROXY_HOPS` (see `.env.example`), and set `ZELDA_CUSTOM_DOMAINS=false` unless the proxy can issue certificates for arbitrary hostnames. The editor then hides the Domains tab.
+
+Rate limits key on the visitor's address. With only `ZELDA_TRUST_PROXY=true`, Kork uses the leftmost `X-Forwarded-For` entry and logs a warning at startup, because a client can put any address there when a proxy appends to the header. Behind Cloudflare, set `ZELDA_CLIENT_IP_HEADER=CF-Connecting-IP`. Otherwise set `ZELDA_PROXY_HOPS` to the number of proxies that append to `X-Forwarded-For`; Kork then takes the entry that many places from the right.
 
 Behind a Cloudflare tunnel, custom domains can use Cloudflare for SaaS instead: set `ZELDA_CLOUDFLARE_TOKEN` and `ZELDA_CLOUDFLARE_ZONE_ID`, and point `ZELDA_DOMAIN_TARGET` at the zone's customer CNAME target. Adding a domain then creates a Cloudflare custom hostname, and Cloudflare issues the certificate. See `docs/custom-domains-cloudflare.md`.
 

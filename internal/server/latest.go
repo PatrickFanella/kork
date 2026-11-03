@@ -133,8 +133,12 @@ func (s *Server) prepareLatest(w http.ResponseWriter, r *http.Request, existing 
 	return func(ctx context.Context, b *store.Block) error {
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
-		prev, _ := s.store.FeedEntries(ctx, []string{b.ID})
-		s.saveLatest(ctx, b.ID, u.ID, d.Source, item, nil, prev[b.ID])
+		// Hold the block's refresh guard, so a background refresh can't import
+		// a thumbnail at the same time and leave one copy orphaned (#65).
+		s.withFeedGuard(ctx, b.ID, func() {
+			prev, _ := s.store.FeedEntries(ctx, []string{b.ID})
+			s.saveLatest(ctx, b.ID, u.ID, d.Source, item, nil, prev[b.ID])
+		})
 		return nil
 	}, true
 }
@@ -247,6 +251,34 @@ func (s *Server) refreshLatest(blockID, ownerID, source string) <-chan struct{} 
 		s.saveLatest(ctx, blockID, ownerID, source, item, err, prev[blockID])
 	}()
 	return ch
+}
+
+// withFeedGuard runs fn while holding a block's in-flight refresh slot,
+// first waiting for a running refresh to finish. It gives up when ctx ends.
+func (s *Server) withFeedGuard(ctx context.Context, blockID string, fn func()) {
+	for {
+		s.x.mu.Lock()
+		ch, busy := s.x.inflight[blockID]
+		if !busy {
+			mine := make(chan struct{})
+			s.x.inflight[blockID] = mine
+			s.x.mu.Unlock()
+			defer func() {
+				s.x.mu.Lock()
+				delete(s.x.inflight, blockID)
+				s.x.mu.Unlock()
+				close(mine)
+			}()
+			fn()
+			return
+		}
+		s.x.mu.Unlock()
+		select {
+		case <-ch:
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 func (s *Server) feedStale(e *store.FeedEntry, now time.Time) bool {

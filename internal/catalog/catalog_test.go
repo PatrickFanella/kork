@@ -3,6 +3,7 @@ package catalog
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestResolve(t *testing.T) {
@@ -115,5 +116,19 @@ func TestThemeNormalize(t *testing.T) {
 		if _, _, err := bad.Normalize(); err == nil {
 			t.Errorf("expected error for %+v", bad)
 		}
+	}
+}
+
+func TestDisplayURLKeepsCharactersWhole(t *testing.T) {
+	long := "https://ünïcödé-ünïcödé-ünïcödé-ünïcödé-ünïcödé.example/path"
+	d := displayURL(long)
+	if !utf8.ValidString(d) {
+		t.Fatalf("broken UTF-8: %q", d)
+	}
+	if r := []rune(d); len(r) != 48 || r[47] != '…' {
+		t.Fatalf("want 47 characters and an ellipsis, got %d: %q", len(r), d)
+	}
+	if got := displayURL("https://www.example.com/a/"); got != "example.com/a" {
+		t.Fatalf("short URL: %q", got)
 	}
 }
