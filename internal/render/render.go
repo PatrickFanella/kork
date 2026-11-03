@@ -110,6 +110,13 @@ func cssVars(t catalog.Theme, bgImage, fontBody, fontDisplay string) template.CS
 	if bg2 == "" {
 		bg2 = c.Surface
 	}
+	// Normalize validates these, but the values are written into a <style>
+	// element unescaped, so check them again here.
+	for _, v := range []string{c.BG, c.Surface, c.Text, c.Muted, c.Accent, c.ButtonBG, c.ButtonText, bg2} {
+		if !catalog.IsHexColor(v) {
+			return cssVars(catalog.DefaultTheme(), bgImage, fontBody, fontDisplay)
+		}
+	}
 	font := catalog.FontStacks[t.Font]
 	if uploadURLRe.MatchString(fontBody) {
 		font = `"` + bodyFontFamily + `", ` + font

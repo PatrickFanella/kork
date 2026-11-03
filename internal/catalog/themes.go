@@ -106,6 +106,9 @@ var Layouts = []Option{{"stack", "Stacked buttons"}, {"ledger", "Numbered ledger
 
 var hexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
+// IsHexColor reports whether v is a #rrggbb color.
+func IsHexColor(v string) bool { return hexColor.MatchString(v) }
+
 func hasOption(opts []Option, key string) bool {
 	for _, o := range opts {
 		if o.Key == key {
@@ -170,6 +173,10 @@ func (t Theme) Normalize() (Theme, string, error) {
 	if t.Background.Kind == "gradient" {
 		fill(&t.Background.Color2, p.Background.Color2)
 		fill(&t.Background.Color2, c.Surface)
+	} else {
+		// Only gradients use a second color. Clearing it keeps an unchecked
+		// value from being stored and later written into the page's CSS.
+		t.Background.Color2 = ""
 	}
 	switch {
 	case !hasOption(Fonts, t.Font):

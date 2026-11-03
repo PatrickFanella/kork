@@ -31,7 +31,7 @@
   {{- range .Items}}
     {{- if eq .Kind "button"}}
     <li class="item item-button">{{template "badge" (index $.Badges .ID)}}
-      <a class="btn" href="{{.Href}}"{{if .External}} target="_blank" rel="{{if .Rel}}{{.Rel}} {{end}}noopener"{{else if .Rel}} rel="{{.Rel}}"{{end}}{{if .Track}} data-track="{{.ID}}"{{end}}>
+      <a class="btn" href="{{.Link}}"{{if .External}} target="_blank" rel="{{if .Rel}}{{.Rel}} {{end}}noopener"{{else if .Rel}} rel="{{.Rel}}"{{end}}{{if .Track}} data-track="{{.ID}}"{{end}}>
         {{if .Image}}<img class="thumb" src="{{.Image}}" alt="" width="40" height="40" loading="lazy">{{else}}<span class="icon">{{.Icon}}</span>{{end}}
         <span class="label"><strong>{{.Title}}</strong>{{if .Subtitle}}<small>{{.Subtitle}}</small>{{end}}</span>
         <i class="arrow" aria-hidden="true">{{if .External}}↗{{else}}→{{end}}</i>
@@ -54,7 +54,7 @@
     {{- else if eq .Kind "divider"}}
     <li class="item item-divider" role="presentation">{{template "badge" (index $.Badges .ID)}}<hr></li>
     {{- else if eq .Kind "image"}}
-    <li class="item item-image">{{template "badge" (index $.Badges .ID)}}{{if .Href}}<a href="{{.Href}}"{{if .External}} target="_blank" rel="noopener"{{end}}{{if .Track}} data-track="{{.ID}}"{{end}}>{{end}}<img src="{{.Image}}" alt="{{.Alt}}" loading="lazy">{{if .Href}}</a>{{end}}</li>
+    <li class="item item-image">{{template "badge" (index $.Badges .ID)}}{{if .Href}}<a href="{{.Link}}"{{if .External}} target="_blank" rel="noopener"{{end}}{{if .Track}} data-track="{{.ID}}"{{end}}>{{end}}<img src="{{.Image}}" alt="{{.Alt}}" loading="lazy">{{if .Href}}</a>{{end}}</li>
     {{- else if eq .Kind "embed"}}
     <li class="item item-embed">{{template "badge" (index $.Badges .ID)}}<iframe src="{{.EmbedSrc}}" title="{{.EmbedTitle}}" loading="lazy" {{if .EmbedHeight}}height="{{.EmbedHeight}}" class="fixed"{{else}}class="video"{{end}} allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"></iframe></li>
     {{- else if eq .Kind "qr"}}
