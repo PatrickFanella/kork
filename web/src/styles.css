@@ -1052,6 +1052,14 @@ a.editor-url:hover {
   overflow-x: auto;
   scrollbar-width: none;
 }
+/* On phones the five tabs don't fit in one row, and a hidden scrollbar gives
+   no hint that Stats and Share sit off-screen, so the row wraps instead. */
+@media (max-width: 560px) {
+  .tabs {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+}
 .tab {
   display: inline-flex;
   align-items: center;
