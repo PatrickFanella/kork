@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { api, errorMessage, type LinkPreview } from "../../api";
 import { Icon } from "../../components/Icon";
 import { Spinner } from "../../components/ui";
+import { previewFills } from "../../lib/linkPreview";
 
 interface LinkPreviewHelperProps {
   url: string;
@@ -12,9 +13,10 @@ interface LinkPreviewHelperProps {
 }
 
 /**
- * Fetches the destination's title, description and image on request. The
- * title and description are offered as suggestions; the image is stored as
- * the user's own upload and applied when the link has no thumbnail yet.
+ * Fetches the destination's title, description and image on request. Fields
+ * the user has left empty are filled in; fields with text keep it and get
+ * the fetched value as a suggestion. The image is stored as the user's own
+ * upload.
  */
 export function LinkPreviewHelper({ url, title, subtitle, thumbnailId, onUse }: LinkPreviewHelperProps) {
   const [busy, setBusy] = useState(false);
@@ -24,10 +26,10 @@ export function LinkPreviewHelper({ url, title, subtitle, thumbnailId, onUse }: 
 
   const target = url.trim();
   const usable = /^(https?:\/\/)?[^\s/:]+\.[^\s]+$/i.test(target);
-  // The newest URL and thumbnail, read when a fetch finishes: the user may
-  // have changed either while it ran.
-  const current = useRef({ url: target, thumbnailId });
-  current.current = { url: target, thumbnailId };
+  // The newest URL and field values, read when a fetch finishes: the user
+  // may have changed any of them while it ran.
+  const current = useRef({ url: target, title, subtitle, thumbnailId });
+  current.current = { url: target, title, subtitle, thumbnailId };
 
   async function fetchPreview() {
     setBusy(true);
@@ -36,8 +38,8 @@ export function LinkPreviewHelper({ url, title, subtitle, thumbnailId, onUse }: 
       const p = await api.linkPreview(target);
       setPreview(p);
       setFetchedFor(target);
-      if (p.thumbnail_upload_id && current.current.url === target && !current.current.thumbnailId) {
-        onUse("thumbnail_upload_id", p.thumbnail_upload_id);
+      if (current.current.url === target) {
+        for (const [key, value] of previewFills(p, current.current)) onUse(key, value);
       }
     } catch (err) {
       setPreview(null);
