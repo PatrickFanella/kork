@@ -24,17 +24,23 @@ OVERRIDES=(docker-compose.proxy.yml compose.nuc.yml)
 # backups out of the 14 kept by zelda-backup.timer.
 export BACKUP_DIR=${BACKUP_DIR:-$DIR/backups-deploy}
 export REMOTE=${REMOTE:-almaz:/opt/server/backups/zelda-deploy}
-export NTFY_URL=${NTFY_URL:-http://10.0.0.56:8085/backups}
+export NTFY_URL=${NTFY_URL:-http://10.0.0.56:8085/homelab}
+# ntfy refuses anonymous publishing; read the host's write-only token (NTFY_TOKEN=...) when it is not set.
+NTFY_TOKEN_FILE=${NTFY_TOKEN_FILE:-$HOME/.config/ntfy-publisher/token.env}
+if [[ -z ${NTFY_TOKEN:-} && -r $NTFY_TOKEN_FILE ]]; then
+  NTFY_TOKEN=$(sed -n 's/^NTFY_TOKEN=//p' "$NTFY_TOKEN_FILE")
+fi
+export NTFY_TOKEN=${NTFY_TOKEN:-}
 export KEEP=${KEEP:-7}
 
 log() { printf '[%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 
-# A failed deploy alerts the same ntfy topic as a failed backup.
+# A failed deploy alerts the same ntfy topic as a failed backup (homelab).
 failed() {
   local msg=$1
   echo "$msg" >&2
   if [[ -n ${NTFY_URL:-} ]]; then
-    curl -fsS -m 10 -H "Title: Kork deploy failed" -H "Priority: high" -d "$msg" "$NTFY_URL" >/dev/null 2>&1 || true
+    curl -fsS -m 10 ${NTFY_TOKEN:+-H "Authorization: Bearer $NTFY_TOKEN"} -H "Title: Kork deploy failed" -H "Priority: high" -d "$msg" "$NTFY_URL" >/dev/null 2>&1 || true
   fi
   exit 1
 }
