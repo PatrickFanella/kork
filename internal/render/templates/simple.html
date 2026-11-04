@@ -7,11 +7,13 @@
 <title>{{.Title}}</title>
 <meta name="description" content="{{.AppName}} is a free link page: your socials, payment buttons that open your own accounts, QR codes, tour dates and an email sign-up at one address.">
 <link rel="icon" href="/static/brand/favicon.svg?v={{.AssetVersion}}" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
 <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon.png?v={{.AssetVersion}}">
 {{if .Landing}}
 <link rel="canonical" href="{{.BaseURL}}/">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta property="og:type" content="website">
+<meta property="og:site_name" content="{{.AppName}}">
 <meta property="og:title" content="{{.AppName}}: a free link page by SUBCULT">
 <meta property="og:description" content="Socials, payment buttons that open your own accounts, QR codes and tour dates at one address. Free, and no cut of your tips.">
 <meta property="og:url" content="{{.BaseURL}}/">
@@ -20,6 +22,8 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Kork: all of it, pinned to one link. Socials, payments, QR codes and more on one page.">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{.AppName}}: a free link page by SUBCULT">
+<meta name="twitter:description" content="Socials, payment buttons that open your own accounts, QR codes and tour dates at one address. Free, and no cut of your tips.">
 <meta name="twitter:image" content="{{.BaseURL}}/static/brand/og.png">
 <meta name="twitter:image:alt" content="Kork: all of it, pinned to one link. Socials, payments, QR codes and more on one page.">
 {{else}}
