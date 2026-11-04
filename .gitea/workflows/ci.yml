@@ -88,7 +88,28 @@ jobs:
         uses: https://github.com/actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
+      - name: Skip when only documentation changed
+        id: changes
+        env:
+          BEFORE: ${{ github.event.before }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          # A manual run always deploys. A push deploys unless every changed
+          # file is documentation; an unknown "before" (first push, force
+          # push) deploys too.
+          deploy=yes
+          if [ "$EVENT" = push ] && echo "$BEFORE" | grep -Eq '^[0-9a-f]{40}$' && [ "$BEFORE" != 0000000000000000000000000000000000000000 ] \
+             && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            changed=$(git diff --name-only "$BEFORE" HEAD)
+            if [ -n "$changed" ] && ! echo "$changed" | grep -Evq '^(docs/|[^/]+\.md$|LICENSE$)'; then
+              echo "only documentation changed:"; echo "$changed"
+              deploy=no
+            fi
+          fi
+          echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
       - name: Deploy
+        if: steps.changes.outputs.deploy == 'yes'
         env:
           # A key whose only permitted command on the NUC is kork-deploy.
           NUC_DEPLOY_KEY: ${{ secrets.NUC_DEPLOY_KEY }}

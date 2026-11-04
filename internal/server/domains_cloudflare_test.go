@@ -126,7 +126,16 @@ func TestCloudflareDomains(t *testing.T) {
 	if checked, _, err := cf.RefreshOnce(context.Background()); err != nil || checked != 0 {
 		t.Fatalf("refresh skips a domain checked just now: %d %v", checked, err)
 	}
+	// A lapsed plan isn't verified in the background either, as Verify needs Pro.
+	bob.setPlan(plans.Free, nil)
 	clock.Set(clock.Now().Add(cfRefreshMinAge + time.Second))
+	if checked, verified, err := cf.RefreshOnce(context.Background()); err != nil || checked != 0 || verified != 0 {
+		t.Fatalf("refresh verified a Free account's domain: %d %d %v", checked, verified, err)
+	}
+	if ds := domainsOf(); len(ds) != 1 || ds[0].Verified {
+		t.Fatalf("Free account domain verified in the background: %+v", ds)
+	}
+	bob.setPlan(plans.Pro, nil)
 	if checked, verified, err := cf.RefreshOnce(context.Background()); err != nil || checked != 1 || verified != 1 {
 		t.Fatalf("refresh: %d %d %v", checked, verified, err)
 	}

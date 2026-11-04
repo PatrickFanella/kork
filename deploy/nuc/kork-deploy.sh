@@ -17,15 +17,27 @@
 set -euo pipefail
 
 DIR=${KORK_DIR:-/srv/apps/projects/zelda}
-# NUC-local compose files layered on docker-compose.proxy.yml. The last one
-# carries the price display environment from the October 2026 SEO release.
-OVERRIDES=(docker-compose.proxy.yml compose.nuc.yml seo-releases/c20c564-preserved/deploy.json)
-# Same settings as zelda-backup.timer.
-export REMOTE=${REMOTE:-almaz:/opt/server/backups/zelda}
+# NUC-local compose files layered on docker-compose.proxy.yml.
+OVERRIDES=(docker-compose.proxy.yml compose.nuc.yml)
+# Pre-deploy backups live beside the nightly ones but in their own directory
+# with their own retention, so a busy day of merges doesn't push nightly
+# backups out of the 14 kept by zelda-backup.timer.
+export BACKUP_DIR=${BACKUP_DIR:-$DIR/backups-deploy}
+export REMOTE=${REMOTE:-almaz:/opt/server/backups/zelda-deploy}
 export NTFY_URL=${NTFY_URL:-http://10.0.0.56:8085/backups}
-export KEEP=${KEEP:-14}
+export KEEP=${KEEP:-7}
 
 log() { printf '[%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
+
+# A failed deploy alerts the same ntfy topic as a failed backup.
+failed() {
+  local msg=$1
+  echo "$msg" >&2
+  if [[ -n ${NTFY_URL:-} ]]; then
+    curl -fsS -m 10 -H "Title: Kork deploy failed" -H "Priority: high" -d "$msg" "$NTFY_URL" >/dev/null 2>&1 || true
+  fi
+  exit 1
+}
 
 cmd=${SSH_ORIGINAL_COMMAND:-${*:-}}
 read -r verb sha rest <<<"$cmd"
@@ -42,7 +54,7 @@ if ! flock -w 900 9; then
   exit 1
 fi
 
-git fetch -q origin main
+git fetch -q origin main || failed "deploy: git fetch failed"
 if ! git merge-base --is-ancestor "$sha" origin/main; then
   echo "refusing to deploy $sha: not on origin/main" >&2
   exit 3
@@ -69,11 +81,16 @@ if [[ $current == "zelda:$short" ]]; then
 fi
 
 log "backup before deploying $short (current image $current)"
-scripts/backup.sh | tail -1
+scripts/backup.sh | tail -1 || failed "deploy $short: pre-deploy backup failed; nothing was changed"
 
 log "checking out $sha"
-git checkout -q --detach "$sha"
+git checkout -q --detach "$sha" || failed "deploy $short: checkout failed"
 mkdir -p "$release"
+# The installed copy of this script is what runs; say so when the commit
+# being deployed carries a newer version of it.
+if [[ -f deploy/nuc/kork-deploy.sh ]] && ! cmp -s deploy/nuc/kork-deploy.sh "${BASH_SOURCE[0]}"; then
+  log "WARNING: deploy/nuc/kork-deploy.sh in $short differs from the installed ${BASH_SOURCE[0]}; reinstall it with: install -m 0755 deploy/nuc/kork-deploy.sh ~/.local/bin/kork-deploy"
+fi
 # Images are named by commit, so deploying a commit again (a rollback)
 # reuses the image that was built for it the first time.
 if docker image inspect "zelda:$short" >/dev/null 2>&1; then
@@ -82,8 +99,7 @@ else
   log "building zelda:$short"
   docker build -q -t "zelda:$short" . >"$release/build.log" 2>&1 || {
     tail -20 "$release/build.log" >&2
-    echo "build failed; nothing was changed" >&2
-    exit 1
+    failed "deploy $short: image build failed; nothing was changed"
   }
 fi
 
@@ -93,7 +109,7 @@ chain=$(printf -- '-f %s ' "${OVERRIDES[@]}")
 cat >"$release/README.md" <<README
 # Kork release $short ($sha) deployed $(date -u +%Y-%m-%dT%H:%M:%SZ) by kork-deploy
 Previous image: $current
-Pre-deploy backup: the newest entry in backups/ at deploy time (also on $REMOTE)
+Pre-deploy backup: the newest entry in $BACKUP_DIR at deploy time (also on $REMOTE)
 Activate: docker compose -p zelda ${chain}-f $release/compose.json up -d --no-build --no-deps --pull never --wait zelda
 Rollback: same command with $release/rollback.json, or deploy the previous commit again
 README
@@ -102,12 +118,12 @@ log "activating zelda:$short"
 if ! activate "$release/compose.json"; then
   echo "activation failed; restoring $current" >&2
   activate "$release/rollback.json" || echo "rollback failed too; check docker logs zelda-zelda-1" >&2
-  exit 1
+  failed "deploy $short: activation failed; restored $current"
 fi
 curl -fsS "$health" >/dev/null || {
   echo "health check failed at $health; restoring $current" >&2
   activate "$release/rollback.json" || true
-  exit 1
+  failed "deploy $short: health check failed; restored $current"
 }
 log "deployed zelda:$short; health ok at $health; rollback in $release/README.md"
 docker inspect zelda-zelda-1 --format 'restarts={{.RestartCount}} health={{.State.Health.Status}} image={{.Config.Image}}'

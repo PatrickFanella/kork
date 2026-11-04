@@ -79,7 +79,9 @@ Every push to `main` that passes the CI checks is deployed to the NUC by the `de
 
 The job SSHes to the NUC with the `NUC_DEPLOY_KEY` repository secret. On the NUC that key is restricted in `~/.ssh/authorized_keys` to one forced command, an installed copy of [`deploy/nuc/kork-deploy.sh`](deploy/nuc/kork-deploy.sh), so the key can't open a shell or run anything else. The host key is pinned in `deploy/nuc/known_hosts`. The script refuses commits that aren't on `origin/main`, takes a verified backup, builds `zelda:<short sha>`, writes `releases/<short sha>/` with the activation and rollback overrides, activates it with the NUC's compose override chain and waits for the health check; if activation or the health check fails it puts the previous image back and the job fails. Deploys are serialized with a lock.
 
-Because the installed copy is what runs, a change to `deploy/nuc/kork-deploy.sh` takes effect only after `install -m 0755 deploy/nuc/kork-deploy.sh ~/.local/bin/kork-deploy` on the NUC. Database migrations run when the new server starts, so keep them additive; the previous image must still run on the new schema for the automatic rollback to work.
+Because the installed copy is what runs, a change to `deploy/nuc/kork-deploy.sh` takes effect only after `install -m 0755 deploy/nuc/kork-deploy.sh ~/.local/bin/kork-deploy` on the NUC; the deploy log warns when the two differ. Database migrations run when the new server starts, so keep them additive; the previous image must still run on the new schema for the automatic rollback to work.
+
+Pre-deploy backups go to `backups-deploy/` (7 kept, copied to Almaz), separate from the nightly `backups/` retention. A failed deploy posts to the same ntfy topic as a failed backup. A push to `main` that changes only documentation (`docs/`, top-level `.md` files, `LICENSE`) runs the checks but skips the deploy.
 
 ### Behind an existing proxy
 
