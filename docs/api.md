@@ -84,7 +84,7 @@ Both need `X-Requested-With: zelda` and share a limit of 10 per account per hour
 
 - **Archive checks.** The ZIP may be up to 64 MB. It's rejected with `422 invalid_export` (`field: "file"`) when it isn't a ZIP, has no `account.json`, has more than 5,000 entries, or contains an absolute path, `..` or backslash in a name, or a duplicate name. `account.json` may expand to at most 16 MB and each upload to 5 MB, checked while reading, so a ZIP bomb is refused. A `format_version` newer than the server knows returns `422 unsupported_version`.
 - **Page selection.** Each chosen page is created as an unpublished draft under its new `slug` (`422 invalid_slug` for a bad or repeated name), within the plan's page limit. A taken name or a full page limit is reported in `skipped`, and other pages are still imported.
-- **What is recreated.** Title, bio, theme (normalized), Bluesky DID and Web Monetization wallet (validated and screened), custom CSS (sanitized again; inactive without Pro, as when a plan lapses) and blocks with their schedules. Blocks are validated and screened as in the editor; a block that fails either is left out and reported. Images and fonts the page uses are copied as new uploads owned by the importer, checked by content and size, and count against the hourly upload limit. Email sign-up blocks that sent to Brevo or listmonk keep their list in Kork, because provider keys aren't exported and visitors agreed to the original list.
+- **What is recreated.** Title, bio, theme (normalized), Bluesky DID and Web Monetization wallet (validated and screened), custom CSS (sanitized again; inactive without Pro, as when a plan lapses) and blocks with their schedules. Blocks are validated and screened as in the editor; a block that fails either is left out and reported. Images and fonts the page uses are copied as new uploads owned by the importer, checked by content and size, and count against the hourly upload limit; fonts are copied only when the importer's plan includes `custom_fonts`. The theme can only point at the importer's own uploads: a background image or font that wasn't copied is dropped and reported, as with `PATCH /api/pages/{id}`. Custom CSS over the editor's input or output size limits is left out and reported. Email sign-up blocks that sent to Brevo or listmonk keep their list in Kork, because provider keys aren't exported and visitors agreed to the original list.
 - **Never imported.** Sign-up contacts, stats, custom domains, sessions and account fields.
 
 Deleting an account removes the user, billing state (including the Patreon connection; a live Stripe subscription is canceled first), sessions, tokens, pending email changes, uploads rows and files, pages, blocks, domains, reports about those pages, stats, and sign-up addresses and Brevo keys. Its public pages return 404.
@@ -309,7 +309,7 @@ When link screening is configured, web destinations are checked on create and up
 | `divider` | `{}` | |
 | `image` | `{upload_id, alt, url?}` | Optional click-through URL |
 | `embed` | `{url}` | Must match a supported embed provider |
-| `qr` | `{value, label?}` | Renders a QR code inline |
+| `qr` | `{value, label?}` | Renders a QR code inline. `value` is at most 600 characters and 1200 bytes (the encoder's limit); `show_qr` on other blocks is refused when their payload is over 1200 bytes |
 | `copy` | `{label, value}` | Copy-to-clipboard button |
 | `contact` | `{name, phone?, email?, org?, url?, note?, show_qr?}` | "Save contact" button downloading a vCard. `show_qr` adds a QR code of the card's absolute `/vcard/{id}` URL on the page's own host |
 | `map` | `{address, label?}` | Opens the address in a maps app |
@@ -517,7 +517,7 @@ A URL without a scheme gets `https://`. Fetch failures return `422` with `field:
 }
 ```
 
-Each item's `data` has already passed block validation, so the editor creates it unchanged with `POST /api/pages/{id}/blocks`. Linktree pages are read from their embedded `__NEXT_DATA__` JSON (anchors if it is missing); any other page contributes its title, description, `og:image` and links to other sites. Links to known services become service blocks: profile URLs on handle services (`instagram.com/alice` → `alice`) and any URL on URL-input services (Spotify, Apple Music). `mailto:` and `tel:` become email and phone blocks. Everything else becomes a link block. At most 100 items. `avatar_url` is a remote address: copy it with `/api/import/image`, then set `avatar_upload_id`. The editor never loads it directly.
+Each item's `data` has already passed block validation, so the editor creates it unchanged with `POST /api/pages/{id}/blocks`. Linktree pages are read from their embedded `__NEXT_DATA__` JSON (anchors if it is missing); any other page contributes its title, description, `og:image` and links to other sites. Links to known services become service blocks: profile URLs on handle services (`instagram.com/alice` → `alice`; a URL with query parameters other than `utm_*`, such as `facebook.com/profile.php?id=…`, stays a link) and any URL on URL-input services (Spotify, Apple Music). `mailto:` and `tel:` become email and phone blocks. Everything else becomes a link block. At most 100 items. `avatar_url` is a remote address: copy it with `/api/import/image`, then set `avatar_upload_id`. The editor never loads it directly.
 
 `LinkPreview`:
 
@@ -538,7 +538,7 @@ The page image (`og:image`, then `twitter:image`) is downloaded and stored as th
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| POST | `/api/report` | `{slug, reason, details?}` | `204` (public) |
+| POST | `/api/report` | `{slug, reason, details?}` | `204` (public). Only live pages can be reported; a draft or suspended page answers `404` like a missing one. `details` is kept to 1000 characters |
 | GET | `/api/admin/reports` | – | `200 [{id, page_id, slug, reason, details, created_at, resolved}]` |
 | POST | `/api/admin/reports/{id}/resolve` | – | `204` |
 | POST | `/api/admin/pages/{id}/suspend` | `{suspended: bool}` | `204` |

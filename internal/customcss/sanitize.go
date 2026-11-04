@@ -302,6 +302,18 @@ func (s *sanitizer) decls(ns []node, fontFace bool) string {
 			s.warn(d.line, "property %s is not allowed", lname)
 			continue
 		}
+		if fontFace && lname == "unicode-range" {
+			// The tokenizer has no unicode-range token, so U+0025-00FF comes
+			// out as an ident and numbers that the writer would separate.
+			// The descriptor's grammar is narrow enough to check and write
+			// whole.
+			if v, ok := unicodeRange(d.value); ok {
+				out = append(out, "unicode-range:"+v)
+			} else {
+				s.warn(d.line, "removed unicode-range: expected ranges such as U+0025-00FF or U+4??")
+			}
+			continue
+		}
 		if p := s.valueProblem(d.value); p != "" {
 			s.warn(d.line, "removed %s: %s", lname, p)
 			continue
@@ -309,6 +321,40 @@ func (s *sanitizer) decls(ns []node, fontFace bool) string {
 		out = append(out, ident(name)+":"+serialize(d.value))
 	}
 	return strings.Join(out, ";")
+}
+
+var unicodeRangeItem = regexp.MustCompile(`^[Uu]\+[0-9A-Fa-f?]{1,6}(-[0-9A-Fa-f]{1,6})?$`)
+
+// unicodeRange rebuilds a unicode-range value from its tokens and accepts
+// it only when every comma-separated item is a plain range.
+func unicodeRange(ns []node) (string, bool) {
+	var b strings.Builder
+	for _, n := range ns {
+		t := n.tok
+		switch t.kind {
+		case tIdent, tDelim:
+			b.WriteString(t.value)
+		case tNumber:
+			b.WriteString(t.num)
+		case tDimension:
+			b.WriteString(t.num + t.value)
+		case tComma:
+			b.WriteString(",")
+		case tWhitespace:
+			b.WriteString(" ")
+		default:
+			return "", false
+		}
+	}
+	var items []string
+	for _, item := range strings.Split(b.String(), ",") {
+		item = strings.TrimSpace(item)
+		if !unicodeRangeItem.MatchString(item) {
+			return "", false
+		}
+		items = append(items, "U"+strings.ToUpper(item[1:]))
+	}
+	return strings.Join(items, ","), true
 }
 
 // valueProblem checks a declaration value.

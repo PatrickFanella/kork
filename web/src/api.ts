@@ -545,6 +545,22 @@ export function errorMessage(err: unknown): string {
 
 type Method = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
+let unauthorizedHandler: (() => void) | null = null;
+
+/**
+ * Registers what happens when a request outside the auth endpoints answers
+ * 401: the session has expired or was revoked, so the app forgets the
+ * cached user and the route guard sends the user to sign in again.
+ */
+export function onUnauthorized(handler: (() => void) | null): void {
+  unauthorizedHandler = handler;
+}
+
+/** Whether a 401 from path means the session is gone, not bad credentials. */
+export function sessionLost(status: number, path: string): boolean {
+  return status === 401 && !path.startsWith("/api/auth/");
+}
+
 async function request<T>(method: Method, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {
     "X-Requested-With": "zelda",
@@ -564,6 +580,7 @@ async function request<T>(method: Method, path: string, body?: unknown): Promise
     throw new ApiError(0, "network", "Can't reach the server. Check your connection.");
   }
   const text = await res.text();
+  if (sessionLost(res.status, path)) unauthorizedHandler?.();
   if (!res.ok) throw parseApiError(res.status, text);
   if (!text) return undefined as T;
   try {

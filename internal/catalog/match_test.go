@@ -28,6 +28,8 @@ func TestMatchURL(t *testing.T) {
 	}
 	for _, in := range []string{
 		"https://example.com/alice",
+		"https://www.facebook.com/profile.php?id=100001234567",
+		"https://twitter.com/intent/tweet?text=hi",
 		"https://github.com/alice/repo",
 		"https://www.youtube.com/watch?v=abc",
 		"https://youtu.be/abc",

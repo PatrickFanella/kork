@@ -51,6 +51,8 @@ func TestSanitizeKeepsOrdinaryCSS(t *testing.T) {
 		{`.x { background: url("/u/` + ownID + `") }`, `body.kork-page main.page .x{background:url("/u/` + ownID + `")}`},
 		{`@font-face { font-family: Mine; src: url(/u/` + ownID + `) format("woff2"); font-display: swap }`,
 			`@font-face{font-family:Mine;src:url("/u/` + ownID + `") format("woff2");font-display:swap}`},
+		{`@font-face { font-family: Mine; src: url(/u/` + ownID + `); unicode-range: u+0025-00ff, U+4??, U+1F600 }`,
+			`@font-face{font-family:Mine;src:url("/u/` + ownID + `");unicode-range:U+0025-00FF,U+4??,U+1F600}`},
 		{`.q::before { content: "a \"quoted\" <b>" }`, `body.kork-page main.page .q::before{content:"a \22 quoted\22  \3c b\3e "}`},
 		{`h1{font-size:2em}/* trailing comment`, `body.kork-page main.page h1{font-size:2em}`},
 	}

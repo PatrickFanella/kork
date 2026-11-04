@@ -231,7 +231,7 @@ export function ForgotScreen() {
 export function ResetScreen() {
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [touched, setTouched] = useState(false);
@@ -249,6 +249,9 @@ export function ResetScreen() {
     setError(null);
     try {
       await api.reset(token, password);
+      // The reset signs out every session, including one cached here, so
+      // the app must not keep treating this browser as signed in.
+      setUser(null);
       setDone(true);
     } catch (err) {
       setError(errorMessage(err));

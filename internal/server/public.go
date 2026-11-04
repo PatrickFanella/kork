@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"git.subcult.tv/subculture-collective/zelda/internal/blocks"
 	"git.subcult.tv/subculture-collective/zelda/internal/catalog"
@@ -291,11 +292,11 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnprocessableEntity, "invalid", "choose a reason", "reason")
 		return
 	}
-	if len(body.Details) > 1000 {
-		body.Details = body.Details[:1000]
-	}
+	body.Details = truncateRunes(body.Details, 1000)
+	// Only pages visitors can see are reportable; a draft or suspended page
+	// looks the same as a missing one, as it does at GET /{slug}.
 	p, err := s.store.PageBySlug(r.Context(), strings.ToLower(body.Slug))
-	if err != nil {
+	if err != nil || !p.Live() {
 		writeErr(w, http.StatusNotFound, "not_found", "page not found", "slug")
 		return
 	}
@@ -304,6 +305,20 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// truncateRunes keeps at most n characters of s without cutting a multi-byte
+// character in half, which Postgres would reject as invalid UTF-8.
+func truncateRunes(s string, n int) string {
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	i := 0
+	for range n {
+		_, size := utf8.DecodeRuneInString(s[i:])
+		i += size
+	}
+	return s[:i]
 }
 
 func hostOnly(h string) string {

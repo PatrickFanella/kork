@@ -274,7 +274,7 @@ func (s *Server) importPage(ctx context.Context, u *store.User, exp *importedExp
 		if up == nil || !uuidRe.MatchString(up.ID) || !bytes.Contains(pageJSON, []byte(up.ID)) {
 			continue
 		}
-		newID, reason := s.importUpload(ctx, u.ID, exp, up)
+		newID, reason := s.importUpload(ctx, u.ID, exp, up, limits.Features[plans.CustomFonts])
 		if reason != "" {
 			skip("file "+up.File, reason)
 		}
@@ -291,12 +291,36 @@ func (s *Server) importPage(ctx context.Context, u *store.User, exp *importedExp
 	if title == "" || utf8.RuneCountInString(title) > 80 {
 		title = slug
 	}
+	owns := func(id string) bool { return uuidRe.MatchString(id) && s.store.OwnsUpload(ctx, u.ID, id) }
 	var theme catalog.Theme
 	_ = json.Unmarshal([]byte(remap(string(ep.Theme))), &theme)
 	theme, _, err := theme.Normalize()
 	if err != nil {
 		theme = catalog.DefaultTheme()
 		skip("theme", "The theme couldn't be read, so the default theme is used.")
+	}
+	// The same ownership checks as PATCH /api/pages/{id}: a theme may only
+	// point at the importer's own uploads, and fonts at their own font files.
+	if id := theme.Background.ImageUploadID; id != "" && !owns(id) {
+		theme.Background.ImageUploadID = ""
+		if theme.Background.Kind == "image" {
+			theme.Background.Kind = "solid"
+			skip("theme", "The background image wasn't imported, so a solid background is used.")
+		}
+	}
+	if theme.Background.Kind != "image" {
+		theme.Background.ImageUploadID = ""
+	}
+	if fu := theme.FontUploads; fu != nil {
+		for _, id := range []*string{&fu.Body, &fu.Display} {
+			if *id != "" && !s.ownsFont(ctx, u.ID, *id) {
+				*id = ""
+				skip("theme", "An uploaded font wasn't imported, so the preset font is used.")
+			}
+		}
+		if fu.Body == "" && fu.Display == "" {
+			theme.FontUploads = nil
+		}
 	}
 	themeRaw, _ := json.Marshal(theme)
 	p, err := s.store.CreatePageLimit(ctx, u.ID, slug, title, themeRaw, limits.Pages)
@@ -331,14 +355,20 @@ func (s *Server) importPage(ctx context.Context, u *store.User, exp *importedExp
 		return nil, nil, err
 	}
 
-	owns := func(id string) bool { return s.store.OwnsUpload(ctx, u.ID, id) }
-	if css := strings.TrimSpace(remap(ep.CustomCSS)); css != "" {
+	// Custom CSS goes through the same limits as PUT /api/pages/{id}/css.
+	if css := strings.TrimSpace(remap(ep.CustomCSS)); len(css) > customcss.MaxInput {
+		skip("custom CSS", fmt.Sprintf("The custom CSS is larger than %d KB, so it was left out.", customcss.MaxInput>>10))
+	} else if css != "" {
 		res := customcss.Sanitize(css, customcss.UploadChecker(owns))
-		if err := s.store.SetPageCSS(ctx, p.ID, res.CSS); err != nil {
-			return nil, nil, err
-		}
-		if len(res.Warnings) > 0 {
-			skip("custom CSS", "Some custom CSS was removed by the sanitizer.")
+		if len(res.CSS) > customcss.MaxOutput {
+			skip("custom CSS", "The custom CSS is too large after scoping, so it was left out.")
+		} else {
+			if err := s.store.SetPageCSS(ctx, p.ID, res.CSS); err != nil {
+				return nil, nil, err
+			}
+			if len(res.Warnings) > 0 {
+				skip("custom CSS", "Some custom CSS was removed by the sanitizer.")
+			}
 		}
 	}
 
@@ -397,7 +427,18 @@ func (s *Server) importPage(ctx context.Context, u *store.User, exp *importedExp
 
 // importUpload copies one upload from the export as a new upload owned by
 // userID. It returns the new ID, or "" and the reason it was left out.
-func (s *Server) importUpload(ctx context.Context, userID string, exp *importedExport, up *exportUpload) (string, string) {
+// ownsFont reports whether id is a font upload owned by userID.
+func (s *Server) ownsFont(ctx context.Context, userID, id string) bool {
+	if !uuidRe.MatchString(id) {
+		return false
+	}
+	up, err := s.store.Upload(ctx, id)
+	return err == nil && up.UserID == userID && fonts.IsFont(up.ContentType)
+}
+
+// importUpload copies one file from the export as a new upload. Fonts are
+// only copied when allowFonts is set, as font uploads need Pro.
+func (s *Server) importUpload(ctx context.Context, userID string, exp *importedExport, up *exportUpload, allowFonts bool) (string, string) {
 	f := exp.files[up.File]
 	if f == nil || !importUploadName.MatchString(up.File) {
 		return "", "The file is missing from the export."
@@ -414,6 +455,9 @@ func (s *Server) importUpload(ctx context.Context, userID string, exp *importedE
 		ct = fonts.Sniff(data)
 		if ct == "" || len(data) > fonts.MaxSize {
 			return "", "The file isn't a supported image or font."
+		}
+		if !allowFonts {
+			return "", "Font uploads are part of Pro, so the font was left out."
 		}
 	}
 	id, err := s.store.CreateUpload(ctx, userID, ct, len(data))

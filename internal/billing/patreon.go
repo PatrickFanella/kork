@@ -265,6 +265,12 @@ func PatreonNext(prev PatreonState, entitled bool, now time.Time) PatreonState {
 	if prev.ProUntil == nil {
 		return PatreonState{}
 	}
+	if prev.LostAt == nil && !now.Before(*prev.ProUntil) {
+		// The grant already lapsed while checks were missed, so there's
+		// nothing to extend; otherwise a cancelled patron would get
+		// another grace period when checks resume.
+		return PatreonState{}
+	}
 	lost := now
 	if prev.LostAt != nil {
 		lost = *prev.LostAt

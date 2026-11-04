@@ -204,7 +204,7 @@ function CreatePageForm({ base, firstPage, onCancel }: { base: string; firstPage
             error={slugError}
             status={<SlugStatusBadge status={status} />}
           />
-          <TextField label="Title" value={title} onChange={setTitle} placeholder="Your name or brand" maxLength={120} error={fieldErrors.title} />
+          <TextField label="Title" value={title} onChange={setTitle} placeholder="Your name or brand" maxLength={80} error={fieldErrors.title} />
         </div>
         <div className="form-actions">
           <button type="submit" className="btn btn-primary" disabled={!canSubmit}>

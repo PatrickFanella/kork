@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import type { MouseEvent } from "react";
 import { api, errorMessage } from "../api";
 import { useAuth, useUser } from "../auth";
+import { confirmLeave } from "../lib/unsaved";
 import { Icon } from "./Icon";
 import { Logo } from "./Logo";
 
@@ -9,6 +11,11 @@ export function AppShell() {
   const user = useUser();
   const { logout } = useAuth();
   const navigate = useNavigate();
+  // The editor's forms register unsaved changes; leaving through the top
+  // bar asks the same question as leaving through the editor's own links.
+  const guard = (e: MouseEvent<HTMLAnchorElement>) => {
+    if (!confirmLeave()) e.preventDefault();
+  };
 
   return (
     <div className="app">
@@ -16,16 +23,22 @@ export function AppShell() {
         Skip to content
       </a>
       <header className="topbar">
-        <Link to="/" className="brand" aria-label="Kork, your pages">
+        <Link to="/" className="brand" aria-label="Kork, your pages" onClick={guard}>
           <Logo />
           <span>kork</span>
         </Link>
         <nav className="topnav" aria-label="Main">
-          <NavLink to="/" end>
+          <NavLink to="/" end onClick={guard}>
             Pages
           </NavLink>
-          <NavLink to="/settings">Settings</NavLink>
-          {user.is_admin && <NavLink to="/admin">Admin</NavLink>}
+          <NavLink to="/settings" onClick={guard}>
+            Settings
+          </NavLink>
+          {user.is_admin && (
+            <NavLink to="/admin" onClick={guard}>
+              Admin
+            </NavLink>
+          )}
         </nav>
         <div className="topbar-user">
           <span className="topbar-email" title={user.email}>
@@ -35,6 +48,7 @@ export function AppShell() {
             type="button"
             className="btn btn-sm btn-ghost"
             onClick={async () => {
+              if (!confirmLeave()) return;
               await logout().catch(() => undefined);
               navigate("/login", { replace: true });
             }}
