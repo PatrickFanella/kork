@@ -5,7 +5,17 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"git.subcult.tv/subculture-collective/zelda/internal/render"
 )
+
+// handleFavicon serves the brand icon at /favicon.ico, where browsers and
+// crawlers look without reading the page's icon links.
+func (s *Server) handleFavicon(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "image/x-icon")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	http.ServeFileFS(w, r, render.Static(), "brand/favicon.ico")
+}
 
 func (s *Server) handleRobots(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")

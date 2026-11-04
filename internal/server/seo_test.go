@@ -34,6 +34,14 @@ func TestPlatformSEO(t *testing.T) {
 	if !strings.Contains(landing.Body.String(), `rel="canonical" href="https://kork.example/"`) {
 		t.Fatal("landing missing canonical")
 	}
+	if !strings.Contains(landing.Body.String(), `property="og:site_name" content="Kork"`) {
+		t.Fatal("landing missing og:site_name")
+	}
+	favicon := httptest.NewRecorder()
+	s.handleFavicon(favicon, httptest.NewRequest("GET", "/favicon.ico", nil))
+	if favicon.Code != 200 || favicon.Header().Get("Content-Type") != "image/x-icon" || favicon.Body.Len() == 0 {
+		t.Fatalf("favicon.ico: status %d, type %q, %d bytes", favicon.Code, favicon.Header().Get("Content-Type"), favicon.Body.Len())
+	}
 	notFound := httptest.NewRecorder()
 	s.notFoundPage(notFound)
 	if notFound.Code != 404 || !strings.Contains(notFound.Body.String(), `content="noindex, follow"`) {
