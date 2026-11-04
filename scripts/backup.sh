@@ -10,6 +10,7 @@
 #   KEEP           backups to keep locally and remotely (default: 14)
 #   REMOTE         rsync target such as almaz:/opt/server/backups/zelda (default: none)
 #   NTFY_URL       ntfy topic URL for failure alerts (default: none)
+#   NTFY_TOKEN     ntfy access token sent as a bearer token (default: none)
 set -euo pipefail
 umask 077
 
@@ -20,6 +21,7 @@ BACKUP_DIR=${BACKUP_DIR:-$ZELDA_DIR/backups}
 KEEP=${KEEP:-14}
 REMOTE=${REMOTE:-}
 NTFY_URL=${NTFY_URL:-}
+NTFY_TOKEN=${NTFY_TOKEN:-}
 if [[ -z ${COMPOSE_FILES:-} ]]; then
   COMPOSE_FILES=docker-compose.proxy.yml
   [[ -f compose.nuc.yml ]] && COMPOSE_FILES+=" compose.nuc.yml"
@@ -32,7 +34,7 @@ log() { printf '[%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
 fail() {
   log "ERROR: $*"
   if [[ -n $NTFY_URL ]]; then
-    curl -fsS -H 'Title: Zelda backup failed' -H 'Priority: high' -H 'Tags: warning,floppy_disk' \
+    curl -fsS ${NTFY_TOKEN:+-H "Authorization: Bearer $NTFY_TOKEN"} -H 'Title: Zelda backup failed' -H 'Priority: high' -H 'Tags: warning,floppy_disk' \
       --data-binary "Zelda backup failed on $(hostname): $*" "$NTFY_URL" >/dev/null 2>&1 || true
   fi
   exit 1
