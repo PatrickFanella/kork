@@ -248,7 +248,9 @@ func (s *Server) handleForgot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	email := strings.ToLower(strings.TrimSpace(body.Email))
-	if s.mailLimit.allow("reset:"+email) && s.mailLimit.allow("reset-ip:"+s.clientIP(r)) {
+	// The IP bucket is checked first: once an IP is limited it can no longer
+	// use up any address's own reset budget.
+	if s.mailLimit.allow("reset-ip:"+s.clientIP(r)) && s.mailLimit.allow("reset:"+email) {
 		if u, err := s.store.UserByEmail(r.Context(), email); err == nil && !u.Suspended {
 			if tok, err := s.store.CreateUserToken(r.Context(), u.ID, "reset", store.ResetTokenTTL); err == nil {
 				link := s.cfg.BaseURL + "/app/reset?token=" + tok

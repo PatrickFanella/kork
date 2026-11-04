@@ -42,6 +42,9 @@ func TestValidate(t *testing.T) {
 		{"embed", `{"url":"https://evil.example.com/video"}`, "url"},
 		{"contact", `{"name":"x","email":"nope"}`, "email"},
 		{"heading", `{"text":"` + strings.Repeat("a", 81) + `"}`, "text"},
+		// 600 characters pass the length check but 1800 bytes don't fit a QR code.
+		{"qr", `{"value":"` + strings.Repeat("漢", 600) + `"}`, "value"},
+		{"link", `{"url":"https://example.com/` + strings.Repeat("a", qr.MaxLen) + `","title":"x","show_qr":true}`, "url"},
 		{"bogus", `{}`, "type"},
 	}
 	for _, c := range bad {

@@ -43,6 +43,9 @@ func TestResolve(t *testing.T) {
 func TestResolveRejects(t *testing.T) {
 	cases := []struct{ service, in string }{
 		{"instagram", "https://evil.example.com/instagram.com"},
+		{"phone", "((((((("},
+		{"whatsapp", "+ - - -  "},
+		{"sms", "+1 23"},
 		{"instagram", "bad handle with spaces"},
 		{"instagram", "javascript:alert(1)"},
 		{"spotify", "https://open.spotify.com.evil.com/x"},

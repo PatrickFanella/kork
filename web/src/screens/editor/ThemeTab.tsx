@@ -39,6 +39,9 @@ export function ThemeTab({ page, setPage, saved }: EditorProps) {
   const [status, setStatus] = useState<SaveStatus>({ kind: "saved" });
   const lastSaved = useRef(JSON.stringify(withDefaults(page.theme)));
   const inFlight = useRef(false);
+  // The in-flight save, so a save sent on unmount can follow it instead of
+  // racing it: two full-theme PATCHes in flight would let the older one win.
+  const inFlightSave = useRef<Promise<unknown>>(Promise.resolve());
   const [retry, setRetry] = useState(0);
 
   // Debounced autosave: whenever the draft differs from what was last saved.
@@ -61,7 +64,9 @@ export function ThemeTab({ page, setPage, saved }: EditorProps) {
       inFlight.current = true;
       setStatus({ kind: "saving" });
       try {
-        const next = await api.updatePage(page.id, { theme: draft });
+        const save = api.updatePage(page.id, { theme: draft });
+        inFlightSave.current = save.catch(() => undefined);
+        const next = await save;
         lastSaved.current = json;
         setPage((p) => ({ ...p, theme: next.theme, updated_at: next.updated_at }));
         setStatus({ kind: "saved" });
@@ -85,8 +90,8 @@ export function ThemeTab({ page, setPage, saved }: EditorProps) {
       const json = JSON.stringify(d);
       if (json === lastSaved.current || (d.background.kind === "image" && !d.background.image_upload_id)) return;
       lastSaved.current = json;
-      api
-        .updatePage(page.id, { theme: d })
+      inFlightSave.current
+        .then(() => api.updatePage(page.id, { theme: d }))
         .then((next) => {
           setPage((p) => ({ ...p, theme: next.theme, updated_at: next.updated_at }));
           saved();

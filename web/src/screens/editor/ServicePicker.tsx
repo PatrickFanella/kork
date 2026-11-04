@@ -95,7 +95,7 @@ export function ServicePicker({ onPick, onUseLink }: { onPick: (service: Catalog
             if (e.key === "Enter") {
               e.preventDefault();
               const first = matches[0];
-              if (first) onPick(first);
+              if (query.trim() && first) onPick(first);
             }
           }}
         />

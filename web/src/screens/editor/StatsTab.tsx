@@ -18,7 +18,10 @@ export function StatsTab({ page }: EditorProps) {
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const { plan } = usePlan();
+  // max_days is the plan's range capped by the server's retention; the Pro
+  // badge and upgrade note only make sense for ranges the plan lacks.
   const maxDays = stats?.data.max_days ?? plan?.stats_days ?? 30;
+  const planDays = plan?.stats_days ?? maxDays;
 
   useEffect(() => {
     let cancelled = false;
@@ -32,7 +35,7 @@ export function StatsTab({ page }: EditorProps) {
     };
   }, [page.id, days, reload]);
 
-  const locked = RANGES.some((r) => r > maxDays);
+  const locked = RANGES.some((r) => r > planDays);
   const rangeControl = (
     <div className="stack">
       <div className="segmented" role="group" aria-label="Date range">
@@ -45,7 +48,7 @@ export function StatsTab({ page }: EditorProps) {
             disabled={r > maxDays}
             onClick={() => setDays(r)}
           >
-            {r} days{r > maxDays && <ProBadge />}
+            {r} days{r > planDays && <ProBadge />}
           </button>
         ))}
       </div>

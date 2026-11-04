@@ -79,6 +79,11 @@ func handleFromURL(s *Service, u *url.URL) string {
 	tPath = "/" + tPath
 	host := strings.ToLower(u.Hostname())
 	path := strings.TrimSuffix(u.Path, "/")
+	// facebook.com/profile.php?id=… and similar aren't profile handles; the
+	// query would be dropped and the handle would point somewhere else.
+	if u.RawQuery != "" && !strings.HasPrefix(u.RawQuery, "utm_") {
+		return ""
+	}
 
 	if pre, post, inHost := strings.Cut(tHost, "{v}"); inHost {
 		// Subdomain profiles such as {v}.bandcamp.com.

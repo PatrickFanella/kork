@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ApiError, errorMessage, parseApiError, unwrapUser } from "./api";
+import { ApiError, errorMessage, parseApiError, sessionLost, unwrapUser } from "./api";
 
 describe("parseApiError", () => {
   it("reads code, message and field from the contract shape", () => {
@@ -43,6 +43,15 @@ describe("upgrade_required", () => {
     expect(err.feature).toBe("custom_domains");
     expect(err.field).toBe("hostname");
     expect(err.message).toBe("Custom domains are part of Pro.");
+  });
+});
+
+describe("sessionLost", () => {
+  it("is a 401 outside the auth endpoints", () => {
+    expect(sessionLost(401, "/api/pages")).toBe(true);
+    expect(sessionLost(401, "/api/auth/login")).toBe(false);
+    expect(sessionLost(401, "/api/auth/me")).toBe(false);
+    expect(sessionLost(403, "/api/pages")).toBe(false);
   });
 });
 

@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"git.subcult.tv/subculture-collective/zelda/internal/catalog"
+	"git.subcult.tv/subculture-collective/zelda/internal/qr"
 )
 
 // FieldError points at the invalid data key.
@@ -113,6 +114,16 @@ func limit(field, v string, max int, required bool) (string, error) {
 	return v, nil
 }
 
+// checkQRPayload rejects a value the QR encoder can't fit, so the block
+// doesn't pass validation and then vanish from the page. The encoder counts
+// bytes, so long non-ASCII values hit this before the character limits.
+func checkQRPayload(field, payload string) error {
+	if len(payload) > qr.MaxLen {
+		return fieldErr(field, fmt.Sprintf("is too long for a QR code (%d bytes at most)", qr.MaxLen))
+	}
+	return nil
+}
+
 func checkUpload(field, id string, owns UploadChecker, required bool) (string, error) {
 	if id == "" {
 		if required {
@@ -158,6 +169,11 @@ func Validate(typ string, raw json.RawMessage, owns UploadChecker) (json.RawMess
 		if b.ThumbnailID, err = checkUpload("thumbnail_upload_id", b.ThumbnailID, owns, false); err != nil {
 			return nil, err
 		}
+		if b.ShowQR {
+			if err = checkQRPayload("url", b.URL); err != nil {
+				return nil, err
+			}
+		}
 		out = b
 	case "service":
 		var b Service
@@ -173,6 +189,11 @@ func Validate(typ string, raw json.RawMessage, owns UploadChecker) (json.RawMess
 			return nil, &FieldError{"value", rerr}
 		}
 		b.Value = r.Value
+		if b.ShowQR {
+			if err = checkQRPayload("value", r.QRPayload); err != nil {
+				return nil, err
+			}
+		}
 		if b.Label, err = limit("label", oneLine(b.Label), 80, false); err != nil {
 			return nil, err
 		}
@@ -230,6 +251,9 @@ func Validate(typ string, raw json.RawMessage, owns UploadChecker) (json.RawMess
 			return nil, err
 		}
 		if b.Value, err = limit("value", strings.TrimSpace(b.Value), 600, true); err != nil {
+			return nil, err
+		}
+		if err = checkQRPayload("value", b.Value); err != nil {
 			return nil, err
 		}
 		if b.Label, err = limit("label", oneLine(b.Label), 80, false); err != nil {

@@ -282,6 +282,9 @@ func (s *Service) Resolve(raw string) (Resolved, error) {
 			return Resolved{}, errors.New("enter a phone number with country code, e.g. +1 555 123 4567")
 		}
 		digits := phoneDigits(v)
+		if len(strings.TrimPrefix(digits, "+")) < 5 {
+			return Resolved{}, errors.New("enter a phone number with country code, e.g. +1 555 123 4567")
+		}
 		var link string
 		switch s.Key {
 		case "whatsapp":
@@ -358,7 +361,7 @@ func CheckLinkURL(raw string) (string, error) {
 		}
 		return v, nil
 	case strings.HasPrefix(v, "tel:"), strings.HasPrefix(v, "sms:"):
-		if !phoneRe.MatchString(v[4:]) {
+		if !phoneRe.MatchString(v[4:]) || len(strings.TrimPrefix(phoneDigits(v[4:]), "+")) < 5 {
 			return "", errors.New("invalid phone link")
 		}
 		return v, nil

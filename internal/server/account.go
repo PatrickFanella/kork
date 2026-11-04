@@ -275,7 +275,9 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 	}
 	// The ZIP holds every upload and can take longer than the server's
 	// 30-second write timeout on a slow connection (#63).
-	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(10 * time.Minute))
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(10 * time.Minute)); err != nil {
+		s.log.Warn("export: write deadline not extended", "err", err)
+	}
 	ctx := r.Context()
 	acct, err := s.store.Account(ctx, u)
 	if err != nil {

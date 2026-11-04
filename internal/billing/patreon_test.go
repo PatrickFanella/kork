@@ -155,4 +155,10 @@ func TestPatreonNextGrace(t *testing.T) {
 	if !s.ProUntil.Equal(t0.Add(day + PatreonGrace)) {
 		t.Fatalf("grace from detection: %+v", s)
 	}
+	// A grant that already lapsed while checks were missed doesn't come
+	// back as a fresh grace period when a check finally runs.
+	s = PatreonNext(PatreonState{ProUntil: &short}, false, short.Add(day))
+	if s.ProUntil != nil || s.LostAt != nil {
+		t.Fatalf("expired grant revived: %+v", s)
+	}
 }

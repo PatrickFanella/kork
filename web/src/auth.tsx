@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ApiError, api, type User } from "./api";
+import { ApiError, api, onUnauthorized, type User } from "./api";
 
 type AuthState =
   | { status: "loading" }
@@ -38,6 +38,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // An expired or revoked session shows up as a 401 on an ordinary request.
+  useEffect(() => {
+    onUnauthorized(() => setState({ status: "ready", user: null }));
+    return () => onUnauthorized(null);
+  }, []);
 
   const setUser = useCallback((user: User | null) => setState({ status: "ready", user }), []);
 

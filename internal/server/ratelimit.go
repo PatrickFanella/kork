@@ -19,6 +19,11 @@ type window struct {
 	n     int
 }
 
+// limiterMaxKeys caps distinct keys per limiter. Keys come from client
+// addresses and request fields, so a flood of new keys must not grow memory
+// without bound.
+const limiterMaxKeys = 50_000
+
 func newLimiter(max int, per time.Duration) *limiter {
 	return &limiter{max: max, window: per, hits: map[string]*window{}}
 }
@@ -27,11 +32,19 @@ func (l *limiter) allow(key string) bool {
 	now := time.Now()
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if len(l.hits) > 50_000 {
+	if len(l.hits) >= limiterMaxKeys {
 		for k, w := range l.hits {
 			if now.Sub(w.start) > l.window {
 				delete(l.hits, k)
 			}
+		}
+		// Still full of live windows: drop some so memory stays bounded. The
+		// dropped keys get a fresh window, which is the lesser harm.
+		for k := range l.hits {
+			if len(l.hits) < limiterMaxKeys {
+				break
+			}
+			delete(l.hits, k)
 		}
 	}
 	w, ok := l.hits[key]
