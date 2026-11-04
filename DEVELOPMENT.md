@@ -1,6 +1,6 @@
 # Kork
 
-Kork (code name `zelda`) is a self-serve themed link-page service by SUBCULT. People sign up, add their socials, payment handles, crypto addresses, QR codes, embeds and contact card, pick a theme, and publish at `/{name}`. Custom domains are in the code but switched off on kork.subcult.tv.
+Kork (code name `zelda`) is a self-serve themed link-page service by SUBCULT. People sign up, add their socials, payment handles, crypto addresses, QR codes, embeds and contact card, pick a theme, and publish at `/{name}`. Custom domains run through Cloudflare for SaaS on kork.subcult.tv (see `docs/custom-domains-cloudflare.md`).
 
 - **Go API + server-rendered pages.** Public pages are plain HTML and CSS with one small script for copy buttons, sharing and click counts. No React or third-party requests on visitor pages, apart from embeds a page owner adds.
 - **React editor** (`web/`) at `/app`, built into the Go binary.

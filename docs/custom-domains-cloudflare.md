@@ -10,6 +10,10 @@ Sources: [Configuring Cloudflare for SaaS](https://developers.cloudflare.com/clo
 
 Cloudflare's docs note that tunnel ingress rules route by hostname, and customer hostnames won't match one. So the tunnel's catch-all rule and an Almaz Caddy catch-all site must send unmatched hosts to Kork. Test this with one domain before inviting users.
 
+## Status
+
+Live since November 4, 2026. The zone is enrolled in Cloudflare for SaaS with fallback origin `kork-origin.subcult.tv` (proxied CNAME to the Almaz tunnel) and customer target `customers.subcult.tv` (proxied CNAME to the fallback origin). The Almaz tunnel's catch-all ingress goes to Caddy and Caddy's `:80` catch-all forwards unmatched hosts to Kork, which answers 404 for anything but a verified domain. The NUC's `.env` holds `ZELDA_CLOUDFLARE_TOKEN` (zone-scoped: SSL and Certificates edit, DNS edit, zone read), `ZELDA_CLOUDFLARE_ZONE_ID`, `ZELDA_DOMAIN_TARGET=customers.subcult.tv` and `ZELDA_CUSTOM_DOMAINS=true`. Proven with `kork-test.onnwee.me` on a throwaway Pro account: Kork registered the hostname, the customer-side CNAME and ownership TXT were added by hand, Cloudflare issued the certificate in about six minutes, the background refresh marked the domain active, and the page served over HTTPS; deleting the account removed the hostname from Cloudflare. Enrolling the zone was the only step that needed the dashboard; the API answers "no quota" until then.
+
 ## Owner steps (Cloudflare dashboard; an agent can't do these)
 
 1. **Enable Cloudflare for SaaS** on the `subcult.tv` zone: zone → **SSL/TLS → Custom Hostnames** → enable. Cloudflare may ask for a payment method even though the first 100 hostnames are included.
@@ -20,6 +24,6 @@ Cloudflare's docs note that tunnel ingress rules route by hostname, and customer
 
 ## Agent steps after that
 
-1. Change the cloudflared catch-all on Almaz from `http_status:404` to `http://caddy:80`, and add an Almaz Caddy catch-all site proxying to `10.0.0.56:3053`. Back up both first, validate, reload.
+1. **Done (November 4, 2026).** The cloudflared catch-all on Almaz went from `http_status:404` to `http://caddy:80`, and the Caddy `:80` catch-all now proxies to `10.0.0.56:3053` instead of answering 404 itself. Backups sit beside both files with a `before-kork-domains-` suffix. cloudflared needed a container restart to load the new ingress.
 2. **Done (branch `issue-13-cloudflare-hostnames`).** Kork uses Cloudflare when both `ZELDA_CLOUDFLARE_TOKEN` and `ZELDA_CLOUDFLARE_ZONE_ID` are set; otherwise it keeps the DNS check and on-demand TLS. Adding a domain calls the Custom Hostnames API (`ssl.method: http`, `type: dv`) and stores the hostname ID (migration `0009`). The editor shows the customer the CNAME target, any `ownership_verification` TXT record, certificate validation records and Cloudflare's error messages. Verify, and a background check every 10 minutes, mark the domain verified once the hostname and certificate are both `active`. Deleting a domain, page or account deletes the custom hostname. Custom domains are a Pro feature (#12). API details: "Domains" in `api.md`.
-3. Set `ZELDA_CUSTOM_DOMAINS=true` and `ZELDA_DOMAIN_TARGET=customers.subcult.tv`, redeploy, and test end to end with a domain the owner controls.
+3. **Done (November 4, 2026).** `ZELDA_CUSTOM_DOMAINS=true` and `ZELDA_DOMAIN_TARGET=customers.subcult.tv` are set; see Status above for the end-to-end test. When giving customers the records, write the CNAME target as plain text: a value pasted with Markdown backticks around it breaks the CNAME and leaves the certificate at pending validation.
