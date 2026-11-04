@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"git.subcult.tv/subculture-collective/zelda/internal/cloudflare"
+	"git.subcult.tv/subculture-collective/zelda/internal/plans"
 	"git.subcult.tv/subculture-collective/zelda/internal/store"
 )
 
@@ -206,6 +207,16 @@ func (p *cloudflareDomains) RefreshOnce(ctx context.Context) (checked, verified 
 		if ctx.Err() != nil {
 			return checked, verified, ctx.Err()
 		}
+		// Verifying needs Pro (or a domain from before plans), here as at
+		// POST .../verify; a domain whose owner's plan lapsed stays pending.
+		if ok, err := p.s.domainEntitled(ctx, d); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		} else if !ok {
+			continue
+		}
 		if err := p.refresh(ctx, d); err != nil {
 			if firstErr == nil {
 				firstErr = err
@@ -218,6 +229,27 @@ func (p *cloudflareDomains) RefreshOnce(ctx context.Context) (checked, verified 
 		}
 	}
 	return checked, verified, firstErr
+}
+
+// domainEntitled reports whether d may be verified: it predates plans or
+// its page's owner has custom domains in their plan.
+func (s *Server) domainEntitled(ctx context.Context, d *store.Domain) (bool, error) {
+	old, err := s.store.GrandfatheredDomains(ctx, d.PageID)
+	if err != nil {
+		return false, err
+	}
+	if old[d.ID] {
+		return true, nil
+	}
+	pg, err := s.store.PageByID(ctx, d.PageID)
+	if err != nil {
+		return false, err
+	}
+	limits, _, err := s.entitlements(ctx, pg.UserID)
+	if err != nil {
+		return false, err
+	}
+	return limits.Features[plans.CustomDomains], nil
 }
 
 // RunDomainRefresh runs the custom domain jobs every interval until ctx is
