@@ -73,6 +73,14 @@ Stats are daily totals per page: views, clicks, referrer domains and countries (
 
 Ports 80 and 443 must reach Caddy for ACME. If the service sits behind an existing edge proxy instead, drop the `caddy` service, forward the base host and custom domains to `zelda:8080`, keep `/internal/*` private, and reuse the same `ask` URL for on-demand TLS.
 
+### Automated deploys
+
+Every push to `main` that passes the CI checks is deployed to the NUC by the `deploy` job in [CI](.gitea/workflows/ci.yml). A manual run of the workflow deploys `main`, or the commit given as the `sha` input, which is how to roll back: any commit on `main` can be deployed again.
+
+The job SSHes to the NUC with the `NUC_DEPLOY_KEY` repository secret. On the NUC that key is restricted in `~/.ssh/authorized_keys` to one forced command, an installed copy of [`deploy/nuc/kork-deploy.sh`](deploy/nuc/kork-deploy.sh), so the key can't open a shell or run anything else. The host key is pinned in `deploy/nuc/known_hosts`. The script refuses commits that aren't on `origin/main`, takes a verified backup, builds `zelda:<short sha>`, writes `releases/<short sha>/` with the activation and rollback overrides, activates it with the NUC's compose override chain and waits for the health check; if activation or the health check fails it puts the previous image back and the job fails. Deploys are serialized with a lock.
+
+Because the installed copy is what runs, a change to `deploy/nuc/kork-deploy.sh` takes effect only after `install -m 0755 deploy/nuc/kork-deploy.sh ~/.local/bin/kork-deploy` on the NUC. Database migrations run when the new server starts, so keep them additive; the previous image must still run on the new schema for the automatic rollback to work.
+
 ### Behind an existing proxy
 
 `docker-compose.proxy.yml` runs only Postgres and the app, published on `ZELDA_PUBLISH`. Point the proxy's hostname at that port, set `ZELDA_TRUST_PROXY=true` together with `ZELDA_CLIENT_IP_HEADER` or `ZELDA_PROXY_HOPS` (see `.env.example`), and set `ZELDA_CUSTOM_DOMAINS=false` unless the proxy can issue certificates for arbitrary hostnames. The editor then hides the Domains tab.

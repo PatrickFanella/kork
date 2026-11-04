@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit on main to deploy; defaults to the current main. Pick an older one to roll back."
+        required: false
 
 permissions:
   contents: read
@@ -68,3 +72,32 @@ jobs:
           go test -race -count=1 ./...
       - name: Build server with embedded editor
         run: CGO_ENABLED=0 go build -trimpath -o bin/zelda ./cmd/zelda
+
+  deploy:
+    name: Deploy to NUC
+    # Every push to main that passes the checks is deployed. A manual run
+    # deploys main, or the commit given as input, which is how to roll back.
+    needs: check
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: node:22-bookworm
+    steps:
+      - name: Check out source
+        uses: https://github.com/actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Deploy
+        env:
+          # A key whose only permitted command on the NUC is kork-deploy.
+          NUC_DEPLOY_KEY: ${{ secrets.NUC_DEPLOY_KEY }}
+          DEPLOY_SHA: ${{ github.event.inputs.sha || github.sha }}
+        run: |
+          test -n "$NUC_DEPLOY_KEY" || { echo "NUC_DEPLOY_KEY secret is not set"; exit 1; }
+          echo "$DEPLOY_SHA" | grep -Eq '^[0-9a-f]{40}$' || { echo "DEPLOY_SHA must be a full commit: $DEPLOY_SHA"; exit 1; }
+          command -v ssh >/dev/null || { apt-get update -qq && apt-get install -y -qq openssh-client >/dev/null; }
+          umask 077
+          printf '%s\n' "$NUC_DEPLOY_KEY" > /tmp/kork-deploy-key
+          ssh -i /tmp/kork-deploy-key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile=deploy/nuc/known_hosts onnwee@10.0.0.56 "deploy $DEPLOY_SHA"
