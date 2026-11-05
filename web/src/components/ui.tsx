@@ -78,7 +78,8 @@ export function TextField(props: TextFieldProps) {
   const id = useId();
   const errId = `${id}-err`;
   const hintId = `${id}-hint`;
-  const describedBy = [props.error ? errId : null, props.hint ? hintId : null].filter(Boolean).join(" ") || undefined;
+  const statusId = `${id}-status`;
+  const describedBy = [props.error ? errId : null, props.hint ? hintId : null, props.status ? statusId : null].filter(Boolean).join(" ") || undefined;
   const common = {
     id,
     name: props.name,
@@ -114,9 +115,9 @@ export function TextField(props: TextFieldProps) {
             autoComplete={props.autoComplete}
             onChange={(e) => props.onChange(e.target.value)}
           />
-          {props.status && <span className="input-status">{props.status}</span>}
         </div>
       )}
+      {props.status && <div className="field-status" id={statusId} aria-live="polite">{props.status}</div>}
       {props.hint && (
         <p className="field-hint" id={hintId}>
           {props.hint}

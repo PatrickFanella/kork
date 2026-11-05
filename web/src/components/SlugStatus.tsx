@@ -2,7 +2,7 @@ import type { SlugStatus } from "../lib/useSlugCheck";
 import { Icon } from "./Icon";
 import { Spinner } from "./ui";
 
-/** Inline indicator shown inside the slug input. */
+/** Availability feedback shown below the slug input. */
 export function SlugStatusBadge({ status }: { status: SlugStatus }) {
   switch (status.kind) {
     case "checking":
