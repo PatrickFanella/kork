@@ -129,37 +129,39 @@ export function StatsTab({ page }: EditorProps) {
         {blockRows.length === 0 ? (
           <p className="muted">No clicks yet. Share your page to start collecting them.</p>
         ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th scope="col">Block</th>
-                <th scope="col" className="num">
-                  Clicks
-                </th>
-                <th scope="col" className="num">
-                  Share
-                </th>
-                <th scope="col" className="num">
-                  <abbr title="Clicks divided by page views">Click-through</abbr>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {blockRows.map((b) => (
-                <tr key={b.block_id}>
-                  <td>{b.label || "Deleted block"}</td>
-                  <td className="num">{b.count.toLocaleString()}</td>
-                  <td className="num">
-                    <span className="share-bar" aria-hidden="true">
-                      <span style={{ width: `${totalClicks ? (b.count / totalClicks) * 100 : 0}%` }} />
-                    </span>
-                    {totalClicks ? Math.round((b.count / totalClicks) * 100) : 0}%
-                  </td>
-                  <td className="num">{b.ctr === undefined ? "–" : formatPercent(b.ctr)}</td>
+          <div className="table-scroll" role="region" aria-labelledby="clicks-heading" tabIndex={0}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th scope="col">Block</th>
+                  <th scope="col" className="num">
+                    Clicks
+                  </th>
+                  <th scope="col" className="num">
+                    Share
+                  </th>
+                  <th scope="col" className="num">
+                    <abbr title="Clicks divided by page views">Click-through</abbr>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {blockRows.map((b) => (
+                  <tr key={b.block_id}>
+                    <td>{b.label || "Deleted block"}</td>
+                    <td className="num">{b.count.toLocaleString()}</td>
+                    <td className="num">
+                      <span className="share-bar" aria-hidden="true">
+                        <span style={{ width: `${totalClicks ? (b.count / totalClicks) * 100 : 0}%` }} />
+                      </span>
+                      {totalClicks ? Math.round((b.count / totalClicks) * 100) : 0}%
+                    </td>
+                    <td className="num">{b.ctr === undefined ? "–" : formatPercent(b.ctr)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 
@@ -218,28 +220,30 @@ function BreakdownTable({
       {rows.length === 0 ? (
         <p className="muted">{empty}</p>
       ) : (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th scope="col">{column}</th>
-              <th scope="col" className="num">
-                Views
-              </th>
-              <th scope="col" className="num">
-                Share
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.name}>
-                <td>{label(r.name)}</td>
-                <td className="num">{r.count.toLocaleString()}</td>
-                <td className="num">{total ? Math.round((r.count / total) * 100) : 0}%</td>
+        <div className="table-scroll" role="region" aria-labelledby={id} tabIndex={0}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th scope="col">{column}</th>
+                <th scope="col" className="num">
+                  Views
+                </th>
+                <th scope="col" className="num">
+                  Share
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.name}>
+                  <td>{label(r.name)}</td>
+                  <td className="num">{r.count.toLocaleString()}</td>
+                  <td className="num">{total ? Math.round((r.count / total) * 100) : 0}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   );

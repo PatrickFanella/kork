@@ -5,7 +5,7 @@ html { color-scheme: light dark; }
 
 body {
   margin: 0;
-  min-width: 320px;
+  min-width: 0;
   min-height: 100vh;
   color: var(--text);
   background: var(--bg);
@@ -89,7 +89,7 @@ body.bg-image .page { background: color-mix(in srgb, var(--bg) 82%, transparent)
 .layout-ledger .page { width: min(calc(100% - 2rem), 720px); border-inline: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); padding-inline: 1.5rem; }
 .layout-ledger .profile { text-align: left; padding-top: .8rem; border-top: 3px solid var(--accent); }
 .layout-ledger .avatar { margin: 1rem 0; }
-.layout-ledger .profile h1 { margin-top: 2rem; font-size: clamp(2.6rem, 10vw, 5.5rem); line-height: .85; text-transform: uppercase; letter-spacing: -.05em; }
+.layout-ledger .profile h1 { margin-top: 2rem; font-size: clamp(1.6rem, 10vw, 5.5rem); line-height: .85; text-transform: uppercase; letter-spacing: -.05em; }
 .layout-ledger .profile .bio { margin-left: 0; }
 .layout-ledger .blocks { gap: 0; counter-reset: row; border-top: 3px solid var(--accent); }
 .layout-ledger .item { border-bottom: 1px solid color-mix(in srgb, var(--muted) 35%, transparent); }

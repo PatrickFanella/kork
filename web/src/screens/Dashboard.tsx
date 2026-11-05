@@ -71,22 +71,24 @@ export function Dashboard() {
             {pages.length} of {maxPages} pages used
           </p>
         </div>
-        {!creating && !importing && (
-          <button type="button" className="btn btn-ghost" onClick={() => setImporting(true)} disabled={atLimit}>
-            <span>Import from export</span>
-          </button>
-        )}
         {!creating && (
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => setCreating(true)}
-            disabled={atLimit}
-            title={atLimit ? `You can have up to ${maxPages} pages.` : undefined}
-          >
-            <Icon name="plus" />
-            <span>New page</span>
-          </button>
+          <div className="row">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setCreating(true)}
+              disabled={atLimit}
+              title={atLimit ? `You can have up to ${maxPages} pages.` : undefined}
+            >
+              <Icon name="plus" />
+              <span>New page</span>
+            </button>
+            {!importing && (
+              <button type="button" className="btn btn-ghost" onClick={() => setImporting(true)} disabled={atLimit}>
+                <span>Import from export</span>
+              </button>
+            )}
+          </div>
         )}
       </div>
 
