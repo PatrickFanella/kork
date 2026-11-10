@@ -92,7 +92,8 @@ jobs:
     # deploys main, or the commit given as input, which is how to roll back.
     needs: check
     if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
-    runs-on: ubuntu-latest
+    # Homelab deploy keys accept only Kvant's address (Kvant and its Kuznya VM); the kvant label keeps this job off Buran.
+    runs-on: [ubuntu-latest, kvant]
     timeout-minutes: 20
     container:
       image: node:22-bookworm
