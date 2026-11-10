@@ -1,0 +1,103 @@
+name: Mirror CI
+run-name: Mirror CI ${{ github.sha }}
+
+# Pull-request verification for the Gitea source runs here, on the GitHub
+# organization copy. A bridge reports the "Mirror CI gate" result back to
+# Gitea as "GitHub CI / Mirror CI gate". Main is verified and deployed by
+# Gitea's CI workflow after merge, so it is skipped here.
+'on':
+  push:
+    branches-ignore: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Test and build
+    if: github.repository == 'subculture-collective/kork'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: zelda
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: zelda_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U zelda -d zelda_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Download and verify Go dependencies
+        run: |
+          go mod download
+          go mod verify
+      - name: Check reachable Go vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+      - name: Check Go formatting and vet
+        run: make lint
+      - name: Install editor dependencies
+        working-directory: web
+        run: npm ci
+      - name: Check editor dependency vulnerabilities
+        working-directory: web
+        run: npm audit --audit-level=high
+      - name: Check editor types and tests
+        run: make test-web
+      - name: Build production editor
+        working-directory: web
+        run: npm run build
+      - name: Run Go unit and database integration tests
+        env:
+          # The service container's port is published on the hosted VM.
+          ZELDA_TEST_DATABASE_URL: postgres://zelda:ci-only-password@127.0.0.1:5432/zelda_test?sslmode=disable
+        run: go test -race -count=1 ./...
+      - name: Build server with embedded editor
+        run: CGO_ENABLED=0 go build -trimpath -o bin/zelda ./cmd/zelda
+
+  mirror-gate:
+    name: Mirror CI gate
+    if: always() && github.repository == 'subculture-collective/kork'
+    needs:
+      - check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every verification job
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          results = json.loads(os.environ["RESULTS"])
+          expected = {'check'}
+          assert set(results) == expected, results
+          for name, result in results.items():
+              assert result["result"] == "success", name + " did not pass"
+          PY

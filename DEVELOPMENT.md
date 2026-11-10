@@ -50,8 +50,12 @@ The end-to-end test (`internal/server/server_test.go`) drops and recreates the s
 
 ### Continuous integration
 
-Gitea Actions runs [CI](.gitea/workflows/ci.yml) on pushes, pull requests, and
-manual dispatches. It checks Go formatting and vet, verifies Go modules, installs
+Pull requests are checked on the GitHub organization copy by
+[Mirror CI](.github/workflows/mirror-ci.yml), which runs on every pushed branch
+except `main`; a bridge reports its `Mirror CI gate` job to Gitea as the
+`GitHub CI / Mirror CI gate` status. Gitea Actions runs [CI](.gitea/workflows/ci.yml)
+on pushes to `main` (except documentation-only ones) and manual dispatches. Both
+run the same job. It checks Go formatting and vet, verifies Go modules, installs
 the editor's locked dependencies, runs TypeScript and Vitest checks, and builds
 the production editor. It then runs all Go tests with the race detector against
 a fresh PostgreSQL 17 service and builds the server with the editor embedded.
@@ -157,4 +161,4 @@ docs/billing.md    Stripe and Patreon setup for the owner
 deploy/Caddyfile   TLS and on-demand certificates
 ```
 
-CI uses Go 1.26.9 and checks reachable Go advisories with pinned govulncheck 1.7.0. The editor audit rejects high/critical findings, including development dependencies. Main pushes and all PRs run the single test/build job; feature pushes do not duplicate PR runs. The job binds its disposable PostgreSQL service by run/attempt, forces fresh race tests, and builds the embedded editor/server. Runtime provider/payment and browser acceptance remain separate.
+CI uses Go 1.26.9 and checks reachable Go advisories with pinned govulncheck 1.7.0. The editor audit rejects high/critical findings, including development dependencies. Main pushes run the single test/build job on Gitea and branch pushes run it on GitHub, so each commit is checked once. On Gitea the job binds its disposable PostgreSQL service by run/attempt; on GitHub it reaches the service at 127.0.0.1. Both force fresh race tests and build the embedded editor/server. Runtime provider/payment and browser acceptance remain separate.

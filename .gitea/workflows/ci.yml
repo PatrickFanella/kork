@@ -1,9 +1,17 @@
 name: CI
 
+# Pull-request checks run on the GitHub organization copy
+# (.github/workflows/mirror-ci.yml) and are reported back here as
+# "GitHub CI / Mirror CI gate". This workflow verifies and deploys main.
 on:
   push:
     branches: [main]
-  pull_request:
+    # The deploy step already skips documentation-only pushes; skip the
+    # check for them too.
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - 'LICENSE'
   workflow_dispatch:
     inputs:
       sha:
@@ -15,7 +23,8 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Runs here deploy; never cancel one part-way.
+  cancel-in-progress: false
 
 jobs:
   check:
