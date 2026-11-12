@@ -17,8 +17,8 @@ Researched October 2, 2026. All prices are USD. Each figure carries its source i
 | Analytics (anonymous, no trackers) | Last 30 days, daily totals | 12 months, referrers/countries/click-through, CSV export, weekly email |
 | Kork footer | Shown | Removable |
 | Custom domain | No (kork.subcult.tv/name) | 1 domain, via Cloudflare for SaaS |
-| Scheduled and expiring links (#10) | No | Yes |
-| Email sign-up block (#11) | Yes, with CSV export | Yes, plus newsletter integrations |
+| Scheduled and expiring links ([#15](https://github.com/subculture-collective/kork/issues/15)) | No | Yes |
+| Email sign-up block ([#16](https://github.com/subculture-collective/kork/issues/16)) | Yes, with CSV export | Yes, plus newsletter integrations |
 
 Reasons:
 

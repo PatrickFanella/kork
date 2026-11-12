@@ -102,7 +102,9 @@ Plausible, not reproduced:
 
 ## Tracking issues
 
-Every finding has a Gitea issue, created 2026-11-02.
+Every finding has a Gitea issue, created 2026-11-02. The issues moved to
+GitHub on 2026-11-10 and were renumbered; the numbers below are the old Gitea
+ones, so find an issue on GitHub by its title.
 
 - Fixed on this branch: #44 (theme injection), #45 (phone and SMS links),
   #46 (custom CSS siblings), #47 (`x/net` vulnerability), #48 (Brevo list ID),

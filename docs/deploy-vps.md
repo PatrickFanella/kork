@@ -1,6 +1,6 @@
 # Moving Kork to a VPS
 
-Decision (#6, October 2, 2026): paid Kork will run on a VPS (option B). Until one is available, Kork stays on the homelab NUC behind the Cloudflare tunnel and Almaz Caddy. This runbook is the plan for the move; follow-up work is tracked in its own issue.
+Decision ([#6](https://github.com/subculture-collective/kork/issues/6), October 2, 2026): paid Kork will run on a VPS (option B). Until one is available, Kork stays on the homelab NUC behind the Cloudflare tunnel and Almaz Caddy. This runbook is the plan for the move; follow-up work is tracked in its own issue.
 
 ## What changes
 
@@ -8,7 +8,7 @@ Decision (#6, October 2, 2026): paid Kork will run on a VPS (option B). Until on
 |---|---|---|
 | Compose file | `docker-compose.proxy.yml` + local `compose.nuc.yml` | `docker-compose.yml` (app, Postgres, Caddy) |
 | TLS and routing | Cloudflare tunnel → Almaz Caddy → NUC:3053 | Caddy on the VPS, ports 80/443 |
-| Custom domains | Cloudflare for SaaS (#13) | Built-in DNS check plus Caddy on-demand TLS (`/internal/tls-ask`); Cloudflare for SaaS optional |
+| Custom domains | Cloudflare for SaaS ([#18](https://github.com/subculture-collective/kork/issues/18)) | Built-in DNS check plus Caddy on-demand TLS (`/internal/tls-ask`); Cloudflare for SaaS optional |
 | Client IPs | `X-Forwarded-For` from cloudflared via Caddy | `X-Forwarded-For` from the bundled Caddy (or `CF-Connecting-IP` if the zone stays proxied) |
 | Backups | `zelda-backup.timer` → Almaz; restic → Kvant/Volga | Same script; `REMOTE` points at a homelab host over SSH or Tailscale, plus provider snapshots |
 | Monitoring | Dozor Blackbox probes | Same public probes; replace the LAN `/healthz` target with the VPS address over Tailscale |

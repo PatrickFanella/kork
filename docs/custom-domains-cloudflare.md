@@ -1,6 +1,6 @@
 # Custom domains with Cloudflare for SaaS
 
-Approved in #13 (October 2, 2026). While Kork runs behind the Cloudflare tunnel, Cloudflare for SaaS issues certificates for customer domains and routes their traffic to Kork. After a move to a VPS with the bundled Caddy (see `deploy-vps.md`), Kork's own DNS check and on-demand TLS can replace it.
+Approved in [#18](https://github.com/subculture-collective/kork/issues/18) (October 2, 2026). While Kork runs behind the Cloudflare tunnel, Cloudflare for SaaS issues certificates for customer domains and routes their traffic to Kork. After a move to a VPS with the bundled Caddy (see `deploy-vps.md`), Kork's own DNS check and on-demand TLS can replace it.
 
 Sources: [Configuring Cloudflare for SaaS](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/start/getting-started/), [Create Custom Hostname API](https://developers.cloudflare.com/api/resources/custom_hostnames/methods/create/), [Tunnel as fallback origin](https://developers.cloudflare.com/reference-architecture/design-guides/extending-cloudflares-benefits-to-saas-providers-end-customers/). Pricing (from the October 2026 research): 100 custom hostnames included, then $0.10 per hostname per month; check the current price when enabling.
 
