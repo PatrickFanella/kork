@@ -126,15 +126,15 @@ jobs:
         if: steps.changes.outputs.deploy == 'yes'
         env:
           # A key whose only permitted command on the NUC is kork-deploy.
-          NUC_DEPLOY_KEY: ${{ secrets.NUC_DEPLOY_KEY }}
+          NUC_DEPLOY_KEY_B64: ${{ secrets.NUC_DEPLOY_KEY_B64 }}
           DEPLOY_TARGET: ${{ secrets.DEPLOY_TARGET }}
           DEPLOY_SHA: ${{ github.event.inputs.sha || github.sha }}
         run: |
-          test -n "$NUC_DEPLOY_KEY" || { echo "NUC_DEPLOY_KEY secret is not set"; exit 1; }
+          test -n "$NUC_DEPLOY_KEY_B64" || { echo "NUC_DEPLOY_KEY_B64 secret is not set"; exit 1; }
           test -n "$DEPLOY_TARGET" || { echo "DEPLOY_TARGET secret is not set"; exit 1; }
           echo "$DEPLOY_SHA" | grep -Eq '^[0-9a-f]{40}$' || { echo "DEPLOY_SHA must be a full commit: $DEPLOY_SHA"; exit 1; }
           command -v ssh >/dev/null || { apt-get update -qq && apt-get install -y -qq openssh-client >/dev/null; }
           umask 077
-          printf '%s\n' "$NUC_DEPLOY_KEY" > /tmp/kork-deploy-key
+          printf '%s' "$NUC_DEPLOY_KEY_B64" | base64 -d > /tmp/kork-deploy-key
           ssh -i /tmp/kork-deploy-key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile=deploy/nuc/known_hosts "$DEPLOY_TARGET" "deploy $DEPLOY_SHA"
